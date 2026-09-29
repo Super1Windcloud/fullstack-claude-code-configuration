@@ -3,12 +3,13 @@
 input=$(cat)
 
 # 1. 单次 jq 批量提取所有指标，避免多次进程创建开销
-IFS=$'\t' read -r cwd model remaining cost < <(echo "$input" | jq -r '
+IFS=$'\t' read -r cwd model remaining cost mode < <(echo "$input" | jq -r '
   [
     .cwd // "",
     (.model.display_name // ""),
     (.context_window.remaining_percentage // ""),
-    (.cost.total_cost_usd // "")
+    (.cost.total_cost_usd // ""),
+    (.permission_mode // .mode // "")
   ] | @tsv
 ')
 
@@ -32,14 +33,22 @@ else
 fi
 dir_part=$(printf '\033[1;36m%s\033[0m' "$dir_str")
 
-# 3. Git 分支与改动感知
-if [ -n "$cwd" ] && [ -d "$cwd/.git" -o -f "$cwd/.git" ] || git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+# 3. Git 分支、脏标记与 Ahead/Behind 感知
+if [ -n "$cwd" ] && ([ -d "$cwd/.git" -o -f "$cwd/.git" ] || git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1); then
   branch=$(git -c gc.auto=0 -C "$cwd" branch --show-current 2>/dev/null)
   [ -z "$branch" ] && branch=$(git -c gc.auto=0 -C "$cwd" rev-parse --short HEAD 2>/dev/null)
   if [ -n "$branch" ]; then
     git_dirty=""
     [[ -n $(git -C "$cwd" status --porcelain 2>/dev/null | head -n 1) ]] && git_dirty="*"
-    branch_part=$(printf ' \033[1;35mgit:%s%s\033[0m' "$branch" "$git_dirty")
+    upstream_status=""
+    counts=$(git -C "$cwd" rev-list --left-right --count HEAD...@{u} 2>/dev/null)
+    if [ -n "$counts" ]; then
+      ahead=${counts%%	*}
+      behind=${counts##*	}
+      (( ahead > 0 )) && upstream_status+="↑$ahead"
+      (( behind > 0 )) && upstream_status+="↓$behind"
+    fi
+    branch_part=$(printf ' \033[1;35mgit:%s%s%s\033[0m' "$branch" "$git_dirty" "$upstream_status")
   else
     branch_part=""
   fi
@@ -64,4 +73,23 @@ else
   ctx_part=""
 fi
 
-printf '%s%s%s%s\n' "$dir_part" "$branch_part" "$model_part" "$ctx_part"
+# 6. 权限模式标识（Bypass 状态）
+if [[ "$mode" =~ "bypass" ]] || grep -q '"defaultMode": "bypassPermissions"' ~/.claude/settings.json 2>/dev/null; then
+  mode_part=$(printf ' \033[33m⚡bypass\033[0m')
+else
+  mode_part=""
+fi
+
+# 7. 会话费用（累计花费 > $0 时展示）
+if [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
+  cost_float=$(printf '%.2f' "$cost" 2>/dev/null)
+  if [[ -n "$cost_float" && "$cost_float" != "0.00" ]]; then
+    cost_part=$(printf ' \033[2m$%s\033[0m' "$cost_float")
+  else
+    cost_part=""
+  fi
+else
+  cost_part=""
+fi
+
+printf '%s%s%s%s%s%s\n' "$dir_part" "$branch_part" "$model_part" "$ctx_part" "$mode_part" "$cost_part"
