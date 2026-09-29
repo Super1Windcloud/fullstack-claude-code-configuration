@@ -40,5 +40,11 @@ else
   sed "s|~/|${HOME}/|g" "${SCRIPT_DIR}/settings.json" > "${TARGET_DIR}/settings.json"
 fi
 
+# 5. Install CLAUDE.md
+if [ -f "${SCRIPT_DIR}/CLAUDE.md" ]; then
+  echo "[5/5] Installing CLAUDE.md..."
+  cp "${SCRIPT_DIR}/CLAUDE.md" "${TARGET_DIR}/CLAUDE.md"
+fi
+
 echo "=== Installation Completed Successfully! ==="
 echo "Please verify your ANTHROPIC_AUTH_TOKEN in ${TARGET_DIR}/settings.json."
