@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude Code runtime & state
+history.jsonl
+sessions/
+cache/
+backups/
+file-history/
+paste-cache/
+projects/
+session-env/
+.last-cleanup
+.last_inuse_sweep
+
+# Local overrides & secrets
+*.local.json
+.env
+.env.*
+!.env.example

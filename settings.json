@@ -1,0 +1,79 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://aigo.hair",
+    "ANTHROPIC_AUTH_TOKEN": "YOUR_ANTHROPIC_AUTH_TOKEN_HERE",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
+    "ANTHROPIC_MODEL": "claude-opus-5-5"
+  },
+  "permissions": {
+    "defaultMode": "default",
+    "ask": [
+      "Bash(rm *)",
+      "Bash(rm -rf *)",
+      "Bash(rmdir *)",
+      "Bash(srm *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git restore *)",
+      "Bash(git branch -D *)",
+      "Bash(git checkout -- *)",
+      "Bash(npm publish*)",
+      "Bash(pnpm publish*)",
+      "Bash(yarn publish*)",
+      "Bash(cargo yank*)",
+      "Bash(cargo publish*)",
+      "Bash(adb uninstall*)",
+      "Bash(adb shell rm*)",
+      "Bash(xcrun simctl erase*)",
+      "Bash(pod deintegrate*)",
+      "Bash(sudo *)",
+      "Bash(chmod -R 777 *)",
+      "Bash(killall *)",
+      "Bash(kill -9 *)",
+      "Bash(dd *)",
+      "Bash(mkfs *)",
+      "Edit(//etc/*)",
+      "Edit(~/.ssh/*)"
+    ],
+    "allow": [
+      "Bash(*)",
+      "Edit(*)",
+      "Write(*)",
+      "Read(*)",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "NotebookEdit(*)"
+    ],
+    "additionalDirectories": [
+      "~/super",
+      "~/Library/Android/sdk",
+      "~/.gradle",
+      "~/.cargo",
+      "~/.rustup",
+      "~/Library/Developer",
+      "~/Library/pnpm"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "zsh ~/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "figma@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    }
+  },
+  "effortLevel": "low",
+  "tui": "fullscreen",
+  "theme": "dark"
+}
