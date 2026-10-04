@@ -32,23 +32,35 @@
   * 仅使用项目已配置的本地工具（Biome / Prettier / rustfmt / gofmt / ktlint / ruff / black），严禁主观全局强加；
   * 保护存量未格式化历史代码，避免大面积无关 diff；失败时在 `/tmp/claude_format.log` 留存简短诊断。
 
-### 2. 极致性能非阻塞状态栏 (StatusLine v2)
-经过 Claude Code 2.1.285 深度源码级审计与零子进程重构（单次执行耗时 < 8ms）：
+### 2. 极致性能非阻塞状态栏 (StatusLine v2.5)
+经过 Claude Code 2.1.285 深度源码级审计与零子进程响应式重构：
 * **全栈工程生态精准标签 (Stack Badges)**：
   * 精准区分 Android 与 JVM 工程：只有当检测到 `AndroidManifest.xml` 时才标记 `[android]`，纯 Kotlin/JVM 项目标记为 `[gradle]`，彻底杜绝误标；
   * 原生支持 Bun 1.2+ 的文本格式 `bun.lock` 与旧版 `bun.lockb`；同时覆盖 `[rust]`、`[pnpm]`、`[yarn]`、`[npm]`、`[python:venv]`。
 * **零子进程极致性能重构 (Zero-fork Architecture)**：
-  * 彻底废除 15+ 处 `$(printf ...)` 命令替换，全面改用 Zsh 原生 `printf -v`；
+  * 彻底废除命令替换子 shell，Token 格式化全面改用 Zsh 内置 `printf -v`；
   * 使用 Zsh 内置 `zsh/stat`（`zstat +mtime`）替代外部 `stat` 二进制；
-  * 使用 Zsh 原生字符串替换替代 `cksum | cut`，状态栏渲染耗时从 65ms 压缩至 **< 8ms**。
+  * 使用 Zsh 原生字符串替换替代 `cksum | cut`，除单次 jq 解析外全流程纯内存零子进程。
 * **主动心跳与定时刷新 (`refreshInterval: 10`)**：
-  * 在 `settings.json` 中配置 10 秒定时自动心跳渲染，无需等待键盘交互，后台 Git 状态刷新与 5h 倒计时秒级呈现。
-* **深度真实遥测字段集成 (Telemetry & Awareness)**：
+  * 在 `settings.json` 中配置 10 秒定时自动心跳渲染，无需等待键盘交互，后台 Git 状态刷新与 5h/7d 倒计时秒级呈现。
+* **深度真实遥测字段集成与 Bug 根除 (Telemetry & Awareness)**：
+  * **消除转义乱码**：移除冗余的 `>200k` 标记，消除了转义序列在某些终端被当作字面量输出的问题；
+  * **Worktree 深度感知**：精准解析官方 `workspace.git_worktree` 字符串名称，支持实时展示 `[wt:<name>]`（如 `[wt:feat-auth]`）；
   * **极速模式**：识别真实存在的 `fast_mode` 字段并标记 `⚡fast`；
-  * **超大上下文计价预警**：当 `exceeds_200k_tokens` 时醒目高亮红字 `>200k` 提醒成本；
-  * **Prompt Cache 缓存感知**：显示当前缓存剩余存活时长（如 `cache:42m`）；
-  * **Git 全状态补全**：覆盖 `[rebase]`、`[merge]`、`[cherry-pick]`、`[revert]`、`[bisect]` 与 Worktree `[wt]`；
-  * 示例效果：`hyperscoop [rust] git:main* [wt] ↑2 Claude 3.7 Sonnet·medium 剩余:60% 80k/200k cache:42m 5h:75% +45/-12 ⚡fast`。
+  * **上下文去重紧凑展示**：精简为直观的 `75k/200k`，基于剩余额度动态切换颜色（<20% 红色加粗高亮、<40% 黄色、其余暗色）；
+  * **Prompt Cache 语义升级与 Miss 击穿告警**：
+    * 消除常驻倒计时噪音，仅在**剩余存活不足 10 分钟时黄色预警**（如 `cache:8m`）；
+    * 曾命中缓存但本轮冷启动时显示 `cache:cold` 提醒；
+    * 实时捕捉 `prompt_cache.misses` 与击穿原因，高亮显示 `miss:2(tools_changed)`，严防环境变量或工具变更导致额度隐形消耗；
+  * **7 天用量及重置倒计时**：≥50% 浮现 `7d:55%`，≥80% 红色高亮并附带重置倒计时（如 `7d:82%→2d3h`）；
+  * **Agent 标识**：在 `--agent` 模式下自动浮现青色 `@agent_name`（如 `@reviewer`）；
+  * **响应式自适应布局引擎 (COLUMNS Responsive Engine)**：
+    * 纯 Zsh 零子进程模式匹配 `${plain//${esc}\[[0-9;]#m/}` 精确测量可见文本字符数；
+    * 窄屏下按优先级平滑自动降级（`session` $\to$ `[rust]` $\to$ `+45/-12` $\to$ `cache/miss` $\to$ `model`），杜绝折行破坏排版；
+  * 完整布局示例：
+    ```text
+    hyperscoop [rust] git:main*↑1 [wt:feat-auth] @reviewer Opus 3.7·high 75k/200k 5h:55%→1h6m 7d:82%→2d3h cache:8m miss:2(tools_changed) +45/-12 ⚡fast
+    ```
 
 ### 3. 全栈 Worktree 依赖共享缓存与环境增强
 * **依赖软链接隔离与安全共享**：配置 `worktree.symlinkDirectories: ["node_modules"]`。仅共享无状态/符号隔离的 `node_modules`；**坚决不共享 `target`、`.cargo` 与 `.gradle`**，彻底规避多分支并发 `cargo check` 或 Gradle 构建触发的文件锁死锁（File Lock Contention）与产物污染。
@@ -128,7 +140,7 @@
 ```text
 .
 ├── settings.json              # 核心配置文件（精简权限、Worktree 共享、全链路写保护）
-├── statusline-command.sh      # 毫秒级异步非阻塞定制状态栏脚本（双模态感知/防并发碰撞）
+├── statusline-command.sh      # 零子进程异步响应式状态栏（Cache Miss 击穿感知/自适应降级/原子锁）
 ├── CLAUDE.md                  # 全栈工程防线与交付契约
 ├── install.sh                 # 一键快速安装与热更新脚本
 ├── hooks/                     # Claude Code 核心安全与格式化生命周期钩子
