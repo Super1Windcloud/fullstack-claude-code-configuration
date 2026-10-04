@@ -44,9 +44,9 @@ decide() {
 # ---------------------------------------------------------
 # 0. 极速前置白名单短路 (0ms Fast-Path for Safe Local Development Commands)
 # ---------------------------------------------------------
-# 仅对单条无管道重定向且参数完全安全的常规只读/开发命令瞬间放行
+# 仅对单条无管道重定向且参数完全安全的常规只读/开发命令瞬间放行（支持带路径参数如 git -C、cargo --manifest-path）
 branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
-fast_path_pat="^[[:space:]]*(git[[:space:]]+(status|diff|log|show|rev-parse|rev-list)|git[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|cargo[[:space:]]+(check|test|clippy|tree|metadata|--version)|(pnpm|bun)[[:space:]]+(test|--version|list|build)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file)([[:space:]]|$)"
+fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version)|(pnpm|bun)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file)([[:space:]]|$)"
 
 if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ [\;\&\|\>\<\`\$] ]]; then
   if [[ "$raw_cmd" =~ $fast_path_pat ]]; then
@@ -144,7 +144,7 @@ is_sensitive_read() {
   local all_readers='(cat|head|tail|grep|awk|less|more|bat|strings|rg|sed|jq|cp|mv|source|\.|base64|xxd|hexdump|od|openssl|tar|zip|gzip|7z|bzip2)'
 
   local env_cmd_pattern="${all_readers}[[:space:]]+([^[:space:]]+[[:space:]]+)*([^[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?([[:space:]\"'|;&]|$)"
-  local global_configs='(\.npmrc|\.netrc|\.config/gh/|\.docker/config\.json|\.cargo/credentials|(~|\$HOME|/Users/[^/[:space:]]+)/\.gradle/gradle\.properties|\.(pem|p12|jks|keystore))([[:space:]"'\''|;&]|$)'
+  local global_configs='(\.npmrc|\.netrc|\.config/gh(/.*)?|\.docker/config\.json|\.cargo/credentials.*|(~|\$HOME|/Users/[^/[:space:]]+)/\.gradle/gradle\.properties|\.(pem|p12|jks|keystore))([[:space:]"'\''|;&]|$)'
   local specific_key_files='([a-zA-Z0-9_.-]*[._-])?(rsa|dsa|ed25519|ecdsa|private|priv|secret|server|client|ssl|tls|cert|auth|jwt)[a-zA-Z0-9_.-]*\.key'
 
   # 双重检查：原始命令与去引号命令（彻底免疫 .en""v、'id_'rsa 等字符串拼接逃逸）
@@ -183,15 +183,16 @@ audit_command() {
   fi
 
   # ---------------------------------------------------------
-  # 2. 绝对拒绝 (DENY)：磁盘格式化与系统级毁灭操作
+  # 2. 绝对拒绝 (DENY)：磁盘格式化与系统级毁灭操作（支持 command/builtin/exec/sudo/nohup 包装）
   # ---------------------------------------------------------
-  grep -Eq "${B}(sudo[[:space:]]+)?(mkfs(\.[a-z0-9]+)?|diskutil[[:space:]]+(erase|zero|partition))[[:space:]]" <<<"$cmd" && \
+  local wrap="((sudo|command|builtin|exec|nohup)[[:space:]]+)*"
+  grep -Eq "${B}${wrap}(mkfs(\.[a-z0-9]+)?|diskutil[[:space:]]+(erase|zero|partition))[[:space:]]" <<<"$cmd" && \
     decide deny "磁盘格式化/擦除操作已被全局硬性禁止"
 
-  grep -Eq "${B}dd[[:space:]].*of=/dev/" <<<"$cmd" && \
+  grep -Eq "${B}${wrap}dd[[:space:]].*of=/dev/" <<<"$cmd" && \
     decide deny "向块设备直接写入的 dd 操作已被全局硬性禁止"
 
-  grep -Eq "${B}(sudo[[:space:]]+)?(/bin/)?rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/(\*)?|~(/|\*|/\*)?|\\\$HOME(/|\*|/\*)?|/Users/[^/[:space:]]+(/|\*|/\*)?)([[:space:]\"']|$)" <<<"$cmd" && \
+  grep -Eq "${B}${wrap}(/bin/)?rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/(\*)?|~(/|\*|/\*)?|\\\$HOME(/|\*|/\*)?|/Users/[^/[:space:]]+(/|\*|/\*)?)([[:space:]\"']|$)" <<<"$cmd" && \
     decide deny "删除根目录或用户主目录已被全局硬性禁止"
 
   # ---------------------------------------------------------
