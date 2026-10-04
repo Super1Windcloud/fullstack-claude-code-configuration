@@ -2,23 +2,21 @@
 input=$(cat)
 
 # 1. Single-pass JQ with robust token fallback & effort level extraction
-IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost mode < <(echo "$input" | jq -r '
+IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h mode < <(echo "$input" | jq -r '
   [
     .cwd // "",
     (.model.display_name // .model.id // ""),
     (.effort.level // .effort_level // ""),
     (.context_window.remaining_percentage // ""),
     (
-      .context_window.total_input_tokens //
-      (
-        ((.context_window.current_usage.input_tokens // 0) +
-         (.context_window.current_usage.cache_creation_input_tokens // 0) +
-         (.context_window.current_usage.cache_read_input_tokens // 0)) |
-        if . > 0 then . else "" end
-      ) // ""
+      ((.context_window.current_usage.input_tokens // 0) +
+       (.context_window.current_usage.cache_creation_input_tokens // 0) +
+       (.context_window.current_usage.cache_read_input_tokens // 0)) |
+      if . > 0 then . else "" end
     ),
     (.context_window.context_window_size // .context_window.size // ""),
     (.cost.total_cost_usd // ""),
+    (.rate_limits.five_hour.used_percentage // ""),
     (.permission_mode // .mode // "")
   ] | map(tostring) | join("\u001f")
 ')
@@ -226,20 +224,34 @@ if [ -n "$remaining" ]; then
   fi
 fi
 
-# 7. Bypass mode badge
-if [[ "$mode" =~ "bypass" ]]; then
-  mode_part=$(printf ' \033[33m⚡bypass\033[0m')
-else
-  mode_part=""
+# 7. 订阅用量（5 小时窗口）：存在 rate_limits 即为订阅账号，此时费用仅为 API 等价估算，不再显示
+rl_part=""
+if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
+  rl_int=${rl5h%.*}
+  if (( rl_int >= 80 )); then
+    rl_part=$(printf ' \033[1;31m5h:%d%%\033[0m' "$rl_int")
+  elif (( rl_int >= 50 )); then
+    rl_part=$(printf ' \033[1;33m5h:%d%%\033[0m' "$rl_int")
+  else
+    rl_part=$(printf ' \033[2m5h:%d%%\033[0m' "$rl_int")
+  fi
 fi
 
-# 8. Cost (Estimated with ~)
+# 8. 权限模式显式标识 (⚡bypass vs 🛡️ask)
+mode_part=""
+if [[ "$mode" =~ "bypass" ]]; then
+  mode_part=$(printf ' \033[33m⚡bypass\033[0m')
+elif [ -n "$mode" ] && [ "$mode" != "null" ]; then
+  mode_part=$(printf ' \033[32m🛡️%s\033[0m' "$mode")
+fi
+
+# 9. Cost (Estimated with ~)
 cost_part=""
-if [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
+if [ -z "$rl_part" ] && [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
   cost_float=$(printf '%.2f' "$cost" 2>/dev/null)
   if [[ -n "$cost_float" && "$cost_float" != "0.00" ]]; then
     cost_part=$(printf ' \033[2m~$%s\033[0m' "$cost_float")
   fi
 fi
 
-printf '%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$mode_part" "$cost_part"
+printf '%s%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$rl_part" "$mode_part" "$cost_part"
