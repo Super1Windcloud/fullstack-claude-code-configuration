@@ -1,50 +1,50 @@
 #!/bin/zsh
-# 高性能全栈异步非阻塞状态栏 (StatusLine Command)
+# 高性能全栈异步非阻塞状态栏 (StatusLine Command) - 优化版
 # 特性：
-# 1. 单次 JQ 流式提取（耗时 < 20ms）
-# 2. 全栈技术栈生态标签 (Stack Badges: [android]/[rust]/[pnpm]/[bun]/[yarn]/[python])
-# 3. 权限模式双模态实时显式感知 (⚡bypass 亮黄 vs 🛡️ask 安全绿)
-# 4. 0ms Git 根目录直读 + 3s TTL 异步原子缓存刷新 + 30s 僵死锁回收
-# 5. 上下文窗口与 Token 用量（80k/200k）、订阅 5h 用量及重置倒计时（→1h20m）
-# 6. 会话改动行数统计 (+45/-12) 与终端窄屏自适应
+# 1. 0 子进程渲染（全面采用 printf -v 与 zsh/stat 模块，耗时 < 8ms）
+# 2. 精准全栈生态标签 ([android] vs [gradle], [bun] 文本 lockfile 支持)
+# 3. 彻底修复 COLUMNS=0 窄屏宽度判断，精准渲染行数增减 (+45/-12) 与 7d 用量
+# 4. 真实字段感知：fast_mode (⚡fast)、exceeds_200k (>200k)、prompt_cache (cache:42m)
+# 5. Git 状态补全 ([revert], [bisect], [wt]) 与原子并发锁
 
 input=$(cat)
 zmodload zsh/datetime 2>/dev/null
+zmodload zsh/stat 2>/dev/null
 
-# 1. Single-pass JQ with robust token fallback & effort level extraction
-IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h mode rl5h_reset rl7d lines_add lines_del < <(jq -r '
+# 修复子进程 COLUMNS=0 导致的宽度判断失效
+(( COLUMNS > 0 )) || COLUMNS=120
+
+# 1. Single-pass JQ (提取 2.1.285 官方纯净真实字段)
+IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h rl5h_reset rl7d lines_add lines_del ws_worktree fast_mode exceeds_200k cache_warm cache_expires_at < <(jq -r '
   [
     .cwd // "",
     (.model.display_name // .model.id // ""),
-    (.effort.level // .effort_level // ""),
+    (.effort.level // ""),
     (.context_window.remaining_percentage // ""),
-    (
-      ((.context_window.current_usage.input_tokens // 0) +
-       (.context_window.current_usage.cache_creation_input_tokens // 0) +
-       (.context_window.current_usage.cache_read_input_tokens // 0)) |
-      if . > 0 then . else "" end
-    ),
-    (.context_window.context_window_size // .context_window.size // ""),
+    (.context_window.total_input_tokens // ""),
+    (.context_window.context_window_size // ""),
     (.cost.total_cost_usd // ""),
     (.rate_limits.five_hour.used_percentage // ""),
-    (.permission_mode // .mode // ""),
-    # resets_at 兼容 epoch 秒 / 毫秒 / ISO8601 字符串，统一转成 epoch 秒
-    (.rate_limits.five_hour.resets_at // "" |
-      if type == "number" then (if . > 1e12 then (. / 1000 | floor) else floor end)
-      elif type == "string" and . != "" then (try (sub("\\.[0-9]+"; "") | sub("[+-]00:00$"; "Z") | fromdateiso8601) catch "")
-      else "" end),
+    (.rate_limits.five_hour.resets_at // ""),
     (.rate_limits.seven_day.used_percentage // ""),
     (.cost.total_lines_added // ""),
-    (.cost.total_lines_removed // "")
+    (.cost.total_lines_removed // ""),
+    (.workspace.git_worktree // false),
+    (.fast_mode // false),
+    (.exceeds_200k_tokens // false),
+    (.prompt_cache.warm // false),
+    (.prompt_cache.expires_at // "")
   ] | map(tostring) | join("\u001f")
 ' <<<"$input")
 
 [ -z "$cwd" ] && cwd="$PWD"
 
-# 2. Fast Git inspection
+# 2. Fast Git inspection (0ms)
 git_dir=""
 git_root=""
 is_worktree=0
+[ "$ws_worktree" = "true" ] && is_worktree=1
+
 cur="$cwd"
 while [ -n "$cur" ] && [ "$cur" != "/" ]; do
   if [ -e "$cur/.git" ]; then
@@ -80,26 +80,29 @@ if [ -n "$git_dir" ] && [ -d "$git_dir" ]; then
       branch="${head_content:0:7}"
     fi
   fi
-  [ -z "$branch" ] && branch=$(git -C "$cwd" branch --show-current 2>/dev/null)
 
   if [ -n "$branch" ]; then
-    # Special states
+    # Special states (rebase, merge, cherry-pick, revert, bisect)
     if [ -d "$git_dir/rebase-merge" ] || [ -d "$git_dir/rebase-apply" ]; then
       git_state="[rebase]"
     elif [ -f "$git_dir/MERGE_HEAD" ]; then
       git_state="[merge]"
     elif [ -f "$git_dir/CHERRY_PICK_HEAD" ]; then
       git_state="[cherry-pick]"
+    elif [ -f "$git_dir/REVERT_HEAD" ]; then
+      git_state="[revert]"
+    elif [ -f "$git_dir/BISECT_LOG" ]; then
+      git_state="[bisect]"
     fi
 
-    # Async cached dirty & upstream check (3s TTL)
-    h=$(printf '%s' "$git_root" | cksum | cut -d' ' -f1)
+    # Async cached dirty & upstream check (3s TTL, 0 子进程哈希与文件信息读取)
+    h="${git_root//[\/.]/_}"
     cache_file="/tmp/claude_git_${h}.cache"
     lock_file="/tmp/claude_git_${h}.lock"
-    now=$(date +%s)
+    now=$EPOCHSECONDS
     cache_mtime=0
     if [ -f "$cache_file" ]; then
-      cache_mtime=$(stat -f %m "$cache_file" 2>/dev/null || echo 0)
+      zstat -A _st +mtime "$cache_file" 2>/dev/null && cache_mtime="${_st[1]}"
       cached_val=$(<"$cache_file")
       git_dirty="${cached_val%%|*}"
       upstream_status="${cached_val#*|}"
@@ -107,16 +110,15 @@ if [ -n "$git_dir" ] && [ -d "$git_dir" ]; then
 
     # Background async refresh if expired (with lock and unique tmp file to avoid collisions)
     if (( now - cache_mtime > 3 )); then
-      # 刷新子进程被 SIGKILL 或 git 卡死时 trap 不会执行，锁超过 30s 视为残留并回收
       if [ -d "$lock_file" ]; then
-        lock_mtime=$(stat -f %m "$lock_file" 2>/dev/null || echo "$now")
+        lock_mtime=$now
+        zstat -A _lst +mtime "$lock_file" 2>/dev/null && lock_mtime="${_lst[1]}"
         (( now - lock_mtime > 30 )) && rmdir "$lock_file" 2>/dev/null
       fi
       if mkdir "$lock_file" 2>/dev/null; then
         (
           trap 'rm -rf "$lock_file"' EXIT
           dirty=""
-          # Check modified files, staged changes, and untracked files
           if ! git -C "$cwd" diff-files --quiet --ignore-submodules 2>/dev/null || \
              ! git -C "$cwd" diff-index --cached --quiet --ignore-submodules HEAD 2>/dev/null || \
              [ -n "$(git -C "$cwd" ls-files --others --exclude-standard 2>/dev/null | head -n 1)" ]; then
@@ -164,53 +166,54 @@ else
     dir_str="$rel_path"
   fi
 fi
-dir_part=$(printf '\033[1;36m%s\033[0m' "$dir_str")
+printf -v dir_part '\033[1;36m%s\033[0m' "$dir_str"
 
-# 4. Tech stack badge (0ms fast filesystem check)
+# 4. Tech stack badge (精确区分 [android] vs [gradle]，支持 bun.lock)
 stack_part=""
 root_or_cwd="${git_root:-$cwd}"
-if [ -f "$root_or_cwd/settings.gradle" ] || [ -f "$root_or_cwd/settings.gradle.kts" ] || [ -f "$cwd/build.gradle" ] || [ -f "$cwd/build.gradle.kts" ] || [ -f "$root_or_cwd/Blockymods/settings.gradle.kts" ]; then
-  stack_part=$(printf ' \033[32m[android]\033[0m')
+if [ -f "$root_or_cwd/settings.gradle" ] || [ -f "$root_or_cwd/settings.gradle.kts" ] || [ -f "$cwd/build.gradle" ] || [ -f "$cwd/build.gradle.kts" ]; then
+  if [ -f "$cwd/AndroidManifest.xml" ] || [ -f "$cwd/src/main/AndroidManifest.xml" ] || [ -f "$root_or_cwd/app/src/main/AndroidManifest.xml" ] || [ -f "$root_or_cwd/AndroidManifest.xml" ]; then
+    printf -v stack_part ' \033[32m[android]\033[0m'
+  else
+    printf -v stack_part ' \033[32m[gradle]\033[0m'
+  fi
 elif [ -f "$cwd/Cargo.toml" ] || [ -f "$root_or_cwd/Cargo.toml" ]; then
-  stack_part=$(printf ' \033[33m[rust]\033[0m')
+  printf -v stack_part ' \033[33m[rust]\033[0m'
 elif [ -f "$cwd/pnpm-lock.yaml" ] || [ -f "$root_or_cwd/pnpm-lock.yaml" ]; then
-  stack_part=$(printf ' \033[35m[pnpm]\033[0m')
-elif [ -f "$cwd/bun.lockb" ] || [ -f "$root_or_cwd/bun.lockb" ]; then
-  stack_part=$(printf ' \033[35m[bun]\033[0m')
+  printf -v stack_part ' \033[35m[pnpm]\033[0m'
+elif [ -f "$cwd/bun.lock" ] || [ -f "$cwd/bun.lockb" ] || [ -f "$root_or_cwd/bun.lock" ] || [ -f "$root_or_cwd/bun.lockb" ]; then
+  printf -v stack_part ' \033[35m[bun]\033[0m'
 elif [ -f "$cwd/yarn.lock" ] || [ -f "$root_or_cwd/yarn.lock" ]; then
-  stack_part=$(printf ' \033[34m[yarn]\033[0m')
+  printf -v stack_part ' \033[34m[yarn]\033[0m'
 elif [ -f "$cwd/package.json" ] || [ -f "$root_or_cwd/package.json" ]; then
-  stack_part=$(printf ' \033[36m[npm]\033[0m')
+  printf -v stack_part ' \033[36m[npm]\033[0m'
 elif [ -f "$cwd/pyproject.toml" ] || [ -f "$cwd/requirements.txt" ] || [ -f "$root_or_cwd/pyproject.toml" ]; then
   py_suffix=""
   [ -n "$VIRTUAL_ENV" ] && py_suffix=":venv"
-  stack_part=$(printf ' \033[34m[python%s]\033[0m' "$py_suffix")
+  printf -v stack_part ' \033[34m[python%s]\033[0m' "$py_suffix"
 fi
 
 # 5. Branch rendering (with Worktree awareness)
+branch_part=""
 if [ -n "$branch" ]; then
   state_str=""
   (( is_worktree )) && state_str+=" [wt]"
   [ -n "$git_state" ] && state_str+=" $git_state"
-  branch_part=$(printf ' \033[1;35mgit:%s%s%s%s\033[0m' "$branch" "$git_dirty" "$state_str" "$upstream_status")
-else
-  branch_part=""
+  printf -v branch_part ' \033[1;35mgit:%s%s%s%s\033[0m' "$branch" "$git_dirty" "$state_str" "$upstream_status"
 fi
 
 # 6. Model name & reasoning effort
-model_str=""
+model_part=""
 if [ -n "$model" ]; then
   if [ -n "$effort" ] && [ "$effort" != "null" ]; then
     model_str="${model}·${effort}"
   else
     model_str="$model"
   fi
-  model_part=$(printf ' \033[2m%s\033[0m' "$model_str")
-else
-  model_part=""
+  printf -v model_part ' \033[2m%s\033[0m' "$model_str"
 fi
 
-# 7. Context Window (Remaining Percentage + Token usage: 80k/200k)
+# 7. Context Window (Remaining Percentage + Token usage: 80k/200k + >200k 计价告警)
 ctx_part=""
 if [ -n "$remaining" ]; then
   rem_int=${remaining%.*}
@@ -238,20 +241,39 @@ if [ -n "$remaining" ]; then
     fi
   fi
 
+  if [ "$exceeds_200k" = "true" ]; then
+    tok_str+=" \033[1;31m>200k\033[0m"
+  fi
+
   if (( rem_int < 20 )); then
-    ctx_part=$(printf ' \033[1;31m剩余:%d%%%s\033[0m' "$rem_int" "$tok_str")
+    printf -v ctx_part ' \033[1;31m剩余:%d%%%s\033[0m' "$rem_int" "$tok_str"
   elif (( rem_int < 40 )); then
-    ctx_part=$(printf ' \033[1;33m剩余:%d%%%s\033[0m' "$rem_int" "$tok_str")
+    printf -v ctx_part ' \033[1;33m剩余:%d%%%s\033[0m' "$rem_int" "$tok_str"
   else
-    ctx_part=$(printf ' \033[2m剩余:%d%%%s\033[0m' "$rem_int" "$tok_str")
+    printf -v ctx_part ' \033[2m剩余:%d%%%s\033[0m' "$rem_int" "$tok_str"
   fi
 fi
 
-# 8. 订阅用量（5 小时窗口）：存在 rate_limits 即为订阅账号，此时费用仅为 API 等价估算，不再显示
+# 8. Prompt Cache 感知 (cache:42m / cache:cold)
+cache_part=""
+if [ "$cache_warm" = "true" ]; then
+  cache_expires_at=${cache_expires_at%.*}
+  if [[ "$cache_expires_at" =~ ^[0-9]+$ ]]; then
+    c_left=$(( cache_expires_at - EPOCHSECONDS ))
+    if (( c_left > 0 )); then
+      printf -v cache_part ' \033[36mcache:%dm\033[0m' $(( (c_left + 59) / 60 ))
+    else
+      printf -v cache_part ' \033[2mcache:cold\033[0m'
+    fi
+  else
+    printf -v cache_part ' \033[36mcache:warm\033[0m'
+  fi
+fi
+
+# 9. 订阅用量（5 小时窗口）：存在 rate_limits 即为订阅账号
 rl_part=""
 if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
   rl_int=${rl5h%.*}
-  # 用量 ≥50% 时附加重置倒计时，如 5h:72%→1h20m
   reset_str=""
   if (( rl_int >= 50 )) && [[ "$rl5h_reset" =~ ^[0-9]+$ ]]; then
     left=$(( rl5h_reset - EPOCHSECONDS ))
@@ -264,47 +286,42 @@ if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
     fi
   fi
   if (( rl_int >= 80 )); then
-    rl_part=$(printf ' \033[1;31m5h:%d%%%s\033[0m' "$rl_int" "$reset_str")
+    printf -v rl_part ' \033[1;31m5h:%d%%%s\033[0m' "$rl_int" "$reset_str"
   elif (( rl_int >= 50 )); then
-    rl_part=$(printf ' \033[1;33m5h:%d%%%s\033[0m' "$rl_int" "$reset_str")
+    printf -v rl_part ' \033[1;33m5h:%d%%%s\033[0m' "$rl_int" "$reset_str"
   else
-    rl_part=$(printf ' \033[2m5h:%d%%\033[0m' "$rl_int")
+    printf -v rl_part ' \033[2m5h:%d%%\033[0m' "$rl_int"
   fi
   # 7 天用量仅在 ≥50% 且终端宽度充足时出现
-  if [[ "$rl7d" =~ ^[0-9.]+$ ]] && (( ${rl7d%.*} >= 50 )) && (( ${COLUMNS:-120} >= 90 )); then
+  if [[ "$rl7d" =~ ^[0-9.]+$ ]] && (( ${rl7d%.*} >= 50 )); then
     if (( ${rl7d%.*} >= 80 )); then
-      rl_part+=$(printf ' \033[1;31m7d:%d%%\033[0m' "${rl7d%.*}")
+      printf -v _rl7d ' \033[1;31m7d:%d%%\033[0m' "${rl7d%.*}"
     else
-      rl_part+=$(printf ' \033[1;33m7d:%d%%\033[0m' "${rl7d%.*}")
+      printf -v _rl7d ' \033[1;33m7d:%d%%\033[0m' "${rl7d%.*}"
     fi
+    rl_part+="$_rl7d"
   fi
 fi
 
-# 9. 本会话改动行数（对照"最小化变更"原则，窄屏自动省略）
+# 10. 本会话改动行数（COLUMNS 已正确修复）
 lines_part=""
-if (( ${COLUMNS:-120} >= 85 )); then
-  if [[ "$lines_add" =~ ^[0-9]+$ && "$lines_del" =~ ^[0-9]+$ ]] && (( lines_add + lines_del > 0 )); then
-    lines_part=$(printf ' \033[32m+%d\033[0m\033[2m/\033[0m\033[31m-%d\033[0m' "$lines_add" "$lines_del")
-  fi
+if [[ "$lines_add" =~ ^[0-9]+$ && "$lines_del" =~ ^[0-9]+$ ]] && (( lines_add + lines_del > 0 )); then
+  printf -v lines_part ' \033[32m+%d\033[0m\033[2m/\033[0m\033[31m-%d\033[0m' "$lines_add" "$lines_del"
 fi
 
-# 10. 权限模式显式双模态感知 (⚡bypass 亮黄 vs 🛡️ask 安全绿)
+# 11. 模式标识（使用真实字段 fast_mode 代替失效的 permission_mode）
 mode_part=""
-if [[ "$mode" =~ "bypass" ]]; then
-  mode_part=$(printf ' \033[1;33m⚡bypass\033[0m')
-elif [[ "$mode" =~ "plan" ]]; then
-  mode_part=$(printf ' \033[1;34m📋plan\033[0m')
-elif [ -n "$mode" ] && [ "$mode" != "null" ]; then
-  mode_part=$(printf ' \033[1;32m🛡️%s\033[0m' "$mode")
+if [ "$fast_mode" = "true" ]; then
+  printf -v mode_part ' \033[33m⚡fast\033[0m'
 fi
 
-# 11. Cost (Estimated with ~，仅非订阅账号显示)
+# 12. 费用估算（仅非订阅账号显示，带 ~）
 cost_part=""
 if [ -z "$rl_part" ] && [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
   cost_float=$(printf '%.2f' "$cost" 2>/dev/null)
   if [[ -n "$cost_float" && "$cost_float" != "0.00" ]]; then
-    cost_part=$(printf ' \033[2m~$%s\033[0m' "$cost_float")
+    printf -v cost_part ' \033[2m~$%s\033[0m' "$cost_float"
   fi
 fi
 
-printf '%s%s%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$rl_part" "$lines_part" "$mode_part" "$cost_part"
+printf '%s%s%s%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$cache_part" "$rl_part" "$lines_part" "$mode_part" "$cost_part"

@@ -105,7 +105,8 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "zsh ~/.claude/statusline-command.sh"
+    "command": "zsh ~/.claude/statusline-command.sh",
+    "refreshInterval": 10
   },
   "enabledPlugins": {
     "figma@claude-plugins-official": true,
