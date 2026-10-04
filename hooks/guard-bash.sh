@@ -1,23 +1,26 @@
 #!/bin/bash
-# PreToolUse(Bash) 防线：bypass 模式下仍对不可逆操作强制确认，对毁灭性操作直接拒绝。
-# 融合 Claude Opus 攻防实测 + 全栈工程契约 + 极速短路 + 审计日志流 + macOS 唤醒通知
+# PreToolUse(Bash) 全栈工程防线 (融合版)
+# 架构特性：
+# 1. 攻防实测与红队逃逸防御（递归解包、self-defense、数据外泄、精细化路径判定）
+# 2. 全栈工程生命周期契约（物理禁止裸 cd、多语言增量缓存保护、状态感知）
+# 3. 0ms 纯只读命令极速白名单短路
+# 4. 极简轻量审计日志（仅记录 ask/deny，无侵入式弹窗）
 
 raw_cmd=$(jq -r '.tool_input.command // ""')
 [ -z "$raw_cmd" ] && exit 0
+
+LOG_DIR="$HOME/.claude/logs"
+AUDIT_LOG="$LOG_DIR/bypass_audit.log"
 
 decide() {
   local decision="$1"
   local reason="$2"
 
-  # 1. 异步写入全链路审计流 (/tmp/claude_bypass_audit.log)
-  printf '%s [PID:%s] [%s] %s (Reason: %s)\n' \
-    "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$decision" "$raw_cmd" "$reason" >> /tmp/claude_bypass_audit.log 2>/dev/null &
-
-  # 2. 遇到 ask 或 deny，异步唤醒 macOS 系统级气泡横幅通知
-  if [ "$decision" = "ask" ]; then
-    ( osascript -e 'display notification "'"$reason"'" with title "Claude Code 安全防线" subtitle "需要人工确认"' 2>/dev/null ) &
-  elif [ "$decision" = "deny" ]; then
-    ( osascript -e 'display notification "'"$reason"'" with title "Claude Code 物理硬拦截" subtitle "高危破坏操作已被硬性拒绝"' 2>/dev/null ) &
+  if [ "$decision" != "allow" ]; then
+    [ -d "$LOG_DIR" ] || mkdir -p -m 0700 "$LOG_DIR" 2>/dev/null
+    local clean_cmd="${raw_cmd//$'\n'/⏎}"
+    printf '%s [PID:%s] [%s] %s (Reason: %s)\n' \
+      "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$decision" "$clean_cmd" "$reason" >> "$AUDIT_LOG" 2>/dev/null &
   fi
 
   jq -n --arg d "$decision" --arg r "$reason" \
@@ -28,24 +31,28 @@ decide() {
 # ---------------------------------------------------------
 # 0. 极速前置白名单短路 (0ms Fast-Path for Pure Read-Only)
 # ---------------------------------------------------------
-# 仅当命令完全不含管道、重定向、子 shell、链式连接符且为安全只读前缀时瞬间放行
-if ! grep -Eq '[;&|><`$\n]' <<<"$raw_cmd"; then
-  if grep -Eq '^[[:space:]]*(git[[:space:]]+(status|diff|log|branch|show|remote|rev-parse|rev-list)|cargo[[:space:]]+(check|test|clippy|tree|metadata|--version)|(pnpm|npm|yarn|bun)[[:space:]]+(test|--version|list)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|echo|stat|file)([[:space:]]|$)' <<<"$raw_cmd"; then
-    printf '%s [PID:%s] [allow] %s (fast-path)\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$raw_cmd" >> /tmp/claude_bypass_audit.log 2>/dev/null &
+# 彻底杜绝 [\n] 字符集陷阱与危险子选项绕过
+branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
+fast_path_pat="^[[:space:]]*(git[[:space:]]+(status|diff|log|show|rev-parse|rev-list)|git[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|cargo[[:space:]]+(check|test|clippy|tree|metadata|--version)|(pnpm|npm|yarn|bun)[[:space:]]+(test|--version|list|build)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file)([[:space:]]|$)"
+
+if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ [\;\&\|\>\<\`\$] ]]; then
+  if [[ "$raw_cmd" =~ $fast_path_pat ]]; then
     exit 0
   fi
 fi
 
-# 边界正则：支持行首、管道、链式、子 shell 以及引号内部边界
-B='(^|[;&|(`"'\''[:space:]]|\$\()[[:space:]]*'
+# 严格命令起始/连接边界正则（排除引号与空格，避免参数内部误伤）
+B='(^|[;&|(`\n]|\$\()[[:space:]]*'
 
-# rm 产物安全判定：仅当所有删除目标均位于可再生构建产物/临时目录时放行
+# rm 产物安全判定：仅当删除目标全为本地项目可再生构建产物或 /tmp 目录时放行
 SAFE_DIRS=" target node_modules dist build .gradle __pycache__ .next .turbo .pytest_cache .cache "
 rm_target_safe() {
   local t="${1//[\"\']/}" c comps
   t="${t%/\*}"; t="${t%/}"
   [[ -z "$t" || "$t" =~ (^|/)\.\.(/|$) ]] && return 1
   [[ "$t" =~ ^(/private)?/tmp/.+ || "$t" =~ ^/var/folders/.+ ]] && return 0
+  # 关键防御：任何主目录、绝对系统目录绝不可作为安全产物自动放行（例如 ~/.gradle 或 ~/.cache）
+  [[ "$t" =~ ^(~|\$HOME|/Users/|/home/|/root/|/etc/|/var/|/usr/|/bin/|/sbin/) ]] && return 1
   IFS=/ read -ra comps <<<"$t"
   for c in "${comps[@]}"; do [[ "$SAFE_DIRS" == *" $c "* ]] && return 0; done
   return 1
@@ -79,7 +86,69 @@ rm_needs_confirm() {
   return 1
 }
 
-# 核心单命令/段落深度审计函数（可递归调用）
+# 剥离 heredoc 块，防止写入文件内容被误判为当前 Shell 命令
+strip_heredocs() {
+  local input="$1"
+  if [[ "$input" == *"<<"* ]]; then
+    awk '
+    /<<[[:space:]]*['\''"]?[a-zA-Z0-9_]+['\''"]?/ {
+      match($0, /<<[[:space:]]*['\''"]?[a-zA-Z0-9_]+['\''"]?/)
+      marker=substr($0, RSTART, RLENGTH)
+      gsub(/<<[[:space:]]*['\''"]?|['\''"]?/, "", marker)
+      in_here=1
+      next
+    }
+    in_here && $1 == marker {
+      in_here=0
+      next
+    }
+    !in_here { print }
+    ' <<<"$input"
+  else
+    echo "$input"
+  fi
+}
+
+# 剥离 git commit 的 -m 参数，防止提交信息中的词汇（如 cd, sudo, just release）触发误报
+strip_commit_messages() {
+  local input="$1"
+  if [[ "$input" =~ git[[:space:]]+.*commit ]]; then
+    sed -E -e 's/-m[[:space:]]+("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)//g' \
+           -e 's/--message(=|[[:space:]]+)("[^"]*"|'\''[^'\'']*'\''|[^[:space:]]+)//g' <<<"$input"
+  else
+    echo "$input"
+  fi
+}
+
+# 敏感凭据/密钥文件检测
+is_sensitive_read() {
+  local cmd="$1"
+  # 明确放行 .env.example, .env.sample, .env.template, .env.dist
+  [[ "$cmd" =~ \.env\.(example|sample|template|dist) ]] && return 1
+
+  local file_readers='(cat|head|tail|less|more|bat|cp)'
+  local search_tools='(grep|rg|awk|sed)'
+  local all_readers='(cat|head|tail|grep|awk|less|more|bat|strings|rg|sed|jq|cp|source|\.)'
+
+  local env_cmd_pattern="${all_readers}[[:space:]]+([^[:space:]]+[[:space:]]+)*([^[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?([[:space:]\"'|;&]|$)"
+  local global_configs='(\.npmrc|\.netrc|\.config/gh/|\.docker/config\.json|\.cargo/credentials|(~|\$HOME|/Users/[^/[:space:]]+)/\.gradle/gradle\.properties|\.(pem|p12|jks|keystore))([[:space:]"'\''|;&]|$)'
+  local specific_key_files='([a-zA-Z0-9_.-]*[._-])?(rsa|dsa|ed25519|ecdsa|private|priv|secret|server|client|ssl|tls|cert|auth|jwt)[a-zA-Z0-9_.-]*\.key'
+
+  # 1. 命令行读取 .env
+  grep -Eq "${B}${env_cmd_pattern}" <<<"$cmd" && return 0
+  # 2. 命令行读取全局敏感凭据/证书
+  grep -Eq "${B}${all_readers}[[:space:]]+.*${global_configs}" <<<"$cmd" && return 0
+  # 3. 针对 *.key 文件读取（区分 cat 任意 key 与 rg/grep 的代码搜索模式）
+  grep -Eq "${B}${file_readers}[[:space:]]+.*\.key([[:space:]\"'|;&]|$)" <<<"$cmd" && return 0
+  grep -Eq "${B}${search_tools}[[:space:]]+.*${specific_key_files}([[:space:]\"'|;&]|$)" <<<"$cmd" && return 0
+  # 4. 内联代码执行读取
+  grep -Eq "${B}(python3?|node|ruby|perl)[[:space:]].*(open|read[a-zA-Z]*)\([\"'\'].*([^/[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?[\"'\']" <<<"$cmd" && return 0
+  grep -Eq "${B}(python3?|node|ruby|perl)[[:space:]].*(open|read[a-zA-Z]*)\([\"'\'].*(${global_configs}|${specific_key_files})" <<<"$cmd" && return 0
+
+  return 1
+}
+
+# 深度审计与决策主函数
 audit_command() {
   local cmd="$1"
   [ -z "$cmd" ] && return 0
@@ -87,13 +156,13 @@ audit_command() {
   # ---------------------------------------------------------
   # 1. 递归解包：遇到 eval 或 sh/bash/zsh -c 时提取内层命令递归审查
   # ---------------------------------------------------------
-  if [[ "$cmd" =~ (bash|sh|zsh)[[:space:]]+-c[[:space:]]+[\"'\'](.*)[\"'\'] ]]; then
-    local inner="${BASH_REMATCH[2]}"
-    audit_command "$inner"
+  local subshell_pat='(bash|sh|zsh)[[:space:]]+(-[a-zA-Z]*c)[[:space:]]+["'\''"](.*)["'\''"]'
+  local eval_pat='eval[[:space:]]+["'\''"](.*)["'\''"]'
+  if [[ "$cmd" =~ $subshell_pat ]]; then
+    audit_command "${BASH_REMATCH[3]}"
   fi
-  if [[ "$cmd" =~ eval[[:space:]]+[\"'\'](.*)[\"'\'] ]]; then
-    local inner="${BASH_REMATCH[1]}"
-    audit_command "$inner"
+  if [[ "$cmd" =~ $eval_pat ]]; then
+    audit_command "${BASH_REMATCH[1]}"
   fi
 
   # ---------------------------------------------------------
@@ -105,51 +174,58 @@ audit_command() {
   grep -Eq "${B}dd[[:space:]].*of=/dev/" <<<"$cmd" && \
     decide deny "向块设备直接写入的 dd 操作已被全局硬性禁止"
 
-  grep -Eq "${B}(sudo[[:space:]]+)?(/bin/)?rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/|~|\\\$HOME|/Users/[^/[:space:]]+)/?([[:space:]\"'\']|$)" <<<"$cmd" && \
+  grep -Eq "${B}(sudo[[:space:]]+)?(/bin/)?rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/(\*)?|~(/|\*|/\*)?|\\\$HOME(/|\*|/\*)?|/Users/[^/[:space:]]+(/|\*|/\*)?)([[:space:]\"']|$)" <<<"$cmd" && \
     decide deny "删除根目录或用户主目录已被全局硬性禁止"
 
   # ---------------------------------------------------------
-  # 3. P0：工程契约执行 —— 物理级禁止裸 cd 指令
+  # 3. 预处理：剥离 heredoc 与 git commit -m 文本，防止参数误报
   # ---------------------------------------------------------
-  if grep -Eq "${B}cd([[:space:]]+|$)" <<<"$cmd"; then
-    if ! grep -Eq "${B}cd[[:space:]]+(/private)?/tmp([[:space:]/;|&]|$)|${B}cd[[:space:]]+/var/folders/" <<<"$cmd"; then
+  local scan_cmd
+  scan_cmd=$(strip_heredocs "$cmd")
+  scan_cmd=$(strip_commit_messages "$scan_cmd")
+
+  # ---------------------------------------------------------
+  # 4. P0：工程契约执行 —— 物理级禁止裸 cd 指令
+  # ---------------------------------------------------------
+  if grep -Eq "${B}cd([[:space:]]+|$)" <<<"$scan_cmd"; then
+    if ! grep -Eq "${B}cd[[:space:]]+(/private)?/tmp([[:space:]/;|&]|$)|${B}cd[[:space:]]+/var/folders/" <<<"$scan_cmd"; then
       decide deny "严禁使用裸 cd 命令！请遵守工程契约，改用工具自带路径参数（如 git -C <path>、pnpm --filter <pkg>、cargo --manifest-path <path>）"
     fi
   fi
 
   # ---------------------------------------------------------
-  # 4. P0：防线自我保护 (Self-Defense)
+  # 5. P0：防线自我保护 (Self-Defense)
   # ---------------------------------------------------------
-  if grep -Eq '\.claude/(settings\.json|hooks)' <<<"$cmd"; then
-    if grep -Eq "${B}(sed[[:space:]]+-i|>|>>|tee|mv|cp|rm|chmod)[[:space:]]" <<<"$cmd"; then
-      decide ask "危险操作需确认：正在尝试修改或删除 Claude 核心配置文件/安全防线钩子"
+  if grep -Eq '\.claude/(settings[^/]*\.json|hooks(/|$))' <<<"$cmd"; then
+    if grep -Eq "([>|]|${B}(sed|perl|python3?|node|ruby|tee|mv|cp|rm|chmod|chown|unlink|truncate)[[:space:]])" <<<"$cmd"; then
+      decide ask "危险操作需确认：正在尝试修改、覆盖或删除 Claude 核心配置/安全防线钩子"
     fi
   fi
 
   # ---------------------------------------------------------
-  # 5. P0：Bash 读取敏感凭证与系统私钥
+  # 6. P0：Bash 读取敏感凭证与系统私钥
   # ---------------------------------------------------------
   grep -Eq "${B}security[[:space:]]+find-(generic|internet)-password" <<<"$cmd" && \
     decide ask "危险操作需确认：正在尝试通过 security 读取 macOS 系统钥匙串密码"
 
-  if grep -Eq "${B}(cat|head|tail|grep|awk|less|more|bat|strings)[[:space:]].*(\.env(\.[a-zA-Z0-9_-]+)?|\.npmrc|\.netrc|\.config/gh/.*|\.docker/config\.json|\.cargo/credentials.*|gradle\.properties|\.(pem|p12|jks|keystore|key))([[:space:]\"'\']|$)" <<<"$cmd"; then
+  if is_sensitive_read "$cmd"; then
     decide ask "危险操作需确认：正在尝试读取敏感环境配置、Token 或密钥文件"
   fi
 
   # ---------------------------------------------------------
-  # 6. P1：网络出站本地敏感文件上传/外泄防御 (Exfiltration)
+  # 7. P1：网络出站本地敏感文件上传/外泄防御 (Exfiltration)
   # ---------------------------------------------------------
-  if grep -Eq "${B}(curl[[:space:]].*(-[a-zA-Z]*d|--data[a-z-]*|-F|--form)[[:space:]].*@|wget[[:space:]].*--post-file)" <<<"$cmd"; then
-    decide ask "危险操作需确认：正在尝试通过网络命令外发本地文件（curl/wget @file）"
+  if grep -Eq "${B}(curl[[:space:]].*(-[a-zA-Z]*d|--data[a-z-]*|-F|--form)[[:space:]].*@|curl[[:space:]].*(-[a-zA-Z]*T|--upload-file)[[:space:]]|wget[[:space:]].*--post-file)" <<<"$cmd"; then
+    decide ask "危险操作需确认：正在尝试通过网络命令外发本地文件（curl/wget @file 或 -T）"
   fi
 
   # ---------------------------------------------------------
-  # 7. rm 递归删除精细判定
+  # 8. rm 递归删除精细判定
   # ---------------------------------------------------------
   rm_needs_confirm "$cmd" && decide ask "危险操作需确认：递归删除非构建产物目录（rm -r）"
 
   # ---------------------------------------------------------
-  # 8. Git 工作区与数据抹除防御
+  # 9. Git 工作区与数据抹除防御
   # ---------------------------------------------------------
   if grep -Eq "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?restore[[:space:]]" <<<"$cmd"; then
     grep -Eq -- "--staged|(^|[[:space:]])-S([[:space:]]|$)" <<<"$cmd" && ! grep -Eq -- "--worktree|(^|[[:space:]])-W([[:space:]]|$)" <<<"$cmd" \
@@ -161,15 +237,16 @@ audit_command() {
   fi
 
   # ---------------------------------------------------------
-  # 9. P1：不可逆、对外发布与 Git 核心破坏操作
+  # 10. P1：不可逆、对外发布与 Git 核心破坏操作
   # ---------------------------------------------------------
-  rules=(
+  local rules=(
     "${B}find[[:space:]].*(-delete|-exec[[:space:]]+(/bin/)?rm)|find 批量删除"
     "${B}xargs[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(/bin/)?rm([[:space:]]|$)|xargs 批量删除"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?reset[[:space:]].*--hard|git reset --hard 破坏性重置"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?clean[[:space:]].*-[a-zA-Z]*f|git clean -f 强制清除未跟踪文件"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?push([[:space:]].*)?[[:space:]](--force|--force-with-lease|-[a-zA-Z]*f([[:space:]]|$)|:[a-zA-Z0-9_.-]+|--tags)|git 强制推送或批量推送/删除 Tag"
-    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(branch[[:space:]]+.*-[a-zA-Z]*[Df]|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制删除分支/Tag 或丢弃 Stash"
+    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Dd]|--delete|-[a-zA-Z]*f|--force)([[:space:]]|$)|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制删除分支/Tag 或丢弃 Stash"
+    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?remote[[:space:]]+(remove|rm|set-url)([[:space:]]|$)|删除或修改 git 远程仓库配置"
     "${B}(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash|zsh)|管道直接执行远程未知脚本"
     "${B}(sh|bash|zsh)[[:space:]]+<\([[:space:]]*(curl|wget)|进程替换直接执行远程脚本"
     "${B}(npm|pnpm|yarn|bun)[[:space:]]+publish|发布 npm 包"
@@ -183,13 +260,12 @@ audit_command() {
   )
 
   for r in "${rules[@]}"; do
-    grep -Eq "${r%|*}" <<<"$cmd" && decide ask "危险操作需确认：${r##*|}"
+    grep -Eq "${r%|*}" <<<"$scan_cmd" && decide ask "危险操作需确认：${r##*|}"
   done
 }
 
 # 启动深度审计
 audit_command "$raw_cmd"
 
-# 放行记录并退出
-printf '%s [PID:%s] [allow] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$raw_cmd" >> /tmp/claude_bypass_audit.log 2>/dev/null &
+# 放行并退出（不产生慢速外部审计进程）
 exit 0

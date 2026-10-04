@@ -8,11 +8,9 @@
     "BASH_MAX_TIMEOUT_MS": "1800000",
     "GRADLE_OPTS": "-Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true",
     "PAGER": "cat",
-    "FORCE_COLOR": "1",
-    "CARGO_TERM_COLOR": "always",
     "GIT_TERMINAL_PROMPT": "0",
-    "CI": "1",
-    "DEBIAN_FRONTEND": "noninteractive"
+    "GIT_EDITOR": "true",
+    "HOMEBREW_NO_AUTO_UPDATE": "1"
   },
   "permissions": {
     "allow": [
@@ -22,8 +20,10 @@
       "WebFetch"
     ],
     "deny": [
-      "Edit(~/.claude/settings.json)",
-      "Write(~/.claude/settings.json)",
+      "Edit(~/.claude/settings*.json)",
+      "Write(~/.claude/settings*.json)",
+      "Edit(**/.claude/settings*.json)",
+      "Write(**/.claude/settings*.json)",
       "Edit(~/.claude/hooks/**)",
       "Write(~/.claude/hooks/**)",
       "Read(~/.npmrc)",
@@ -54,7 +54,7 @@
       "Read(**/.env.*)",
       "Write(**/.env.*)",
       "Edit(**/.env.*)",
-      "Read(**/gradle.properties)",
+      "Read(~/.gradle/gradle.properties)",
       "Read(**/*.pem)",
       "Read(**/*.p12)",
       "Read(**/*.jks)",
@@ -109,10 +109,7 @@
   },
   "worktree": {
     "symlinkDirectories": [
-      "node_modules",
-      ".gradle",
-      ".cargo",
-      "target"
+      "node_modules"
     ],
     "baseRef": "head"
   },
