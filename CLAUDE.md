@@ -9,7 +9,7 @@
 ## 2. 命令执行与全栈包管理防线
 - **严禁裸 `cd`**：执行任何命令行指令时，**绝对禁止使用裸 `cd` 命令**。必须始终使用工具自带路径参数（如 `git -C <path>`、`pnpm --filter <pkg>`、`cargo --manifest-path <path>`）或显式绝对路径。
 - **严格尊重既有包管理器锁文件**：
-  - 前端项目：存在 `pnpm-lock.yaml` 时严禁调用 `npm install` 或 `yarn`；存在 `bun.lockb` 优先使用 `bun`；
+  - 前端项目：存在 `pnpm-lock.yaml` 时严禁调用 `npm install` 或 `yarn`；存在 `bun.lock` 或 `bun.lockb` 优先使用 `bun`；
   - Android 工程：统一使用项目根目录的 `./gradlew` 驱动目标模块局部编译，避免全包 assemble；
   - Rust 工程：优先使用 `cargo check` 或针对具体 crate 进行 `cargo test -p <pkg>`，避免无缓存全量构建。
 

@@ -16,7 +16,7 @@ term_cols="${STATUSLINE_WIDTH:-$COLUMNS}"
 (( term_cols > 0 )) || term_cols=120
 
 # 1. Single-pass JQ (提取官方 2.1.285 纯净真实字段)
-IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h rl5h_reset rl7d rl7d_reset lines_add lines_del ws_worktree fast_mode cache_warm cache_expires_at cache_observed cache_misses cache_miss_causes agent_name session_name < <(jq -r '
+IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h rl5h_reset rl7d rl7d_reset lines_add lines_del ws_worktree fast_mode cache_warm cache_expires_at cache_observed cache_misses cache_last_miss cache_miss_causes agent_name session_name < <(jq -r '
   [
     .cwd // "",
     (.model.display_name // .model.id // ""),
@@ -37,7 +37,8 @@ IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h rl5h_r
     (.prompt_cache.expires_at // ""),
     (.prompt_cache.caching_observed // false),
     (.prompt_cache.misses // 0),
-    ((.prompt_cache.last_miss_cause.causes // []) | join(",")),
+    (.prompt_cache.last_miss_at // ""),
+    ((.prompt_cache.last_miss_cause.causes // []) | map({"tools_changed":"tools","system_prompt_changed":"sys","ttl_expired_5m":"ttl","likely_server_side":"srv"}[.] // .) | join(",")),
     (.agent.name // ""),
     (.session_name // "")
   ] | map(tostring) | join("\u001f")
@@ -131,20 +132,26 @@ if [ -n "$git_dir" ] && [ -d "$git_dir" ]; then
       if mkdir "$lock_file" 2>/dev/null; then
         (
           trap 'rm -rf "$lock_file"' EXIT
+          # 单次 status 同时获取 dirty 与 ahead/behind：内存中刷新 stat 信息（避免 touch 后误报 dirty），
+          # --no-optional-locks 不写 index.lock，避免与 Claude 自身的 git 命令争锁
           dirty=""
-          if ! git -C "$cwd" diff-files --quiet --ignore-submodules 2>/dev/null || \
-             ! git -C "$cwd" diff-index --cached --quiet --ignore-submodules HEAD 2>/dev/null || \
-             [ -n "$(git -C "$cwd" ls-files --others --exclude-standard 2>/dev/null | head -n 1)" ]; then
-            dirty="*"
-          fi
           up=""
-          counts=$(git -C "$cwd" rev-list --left-right --count HEAD...@{u} 2>/dev/null)
-          if [ -n "$counts" ]; then
-            ah=${counts%%	*}
-            bh=${counts##*	}
-            (( ah > 0 )) && up+="↑$ah"
-            (( bh > 0 )) && up+="↓$bh"
-          fi
+          ah=0
+          bh=0
+          st=$(git -C "$cwd" --no-optional-locks status --porcelain=v2 --branch --ignore-submodules 2>/dev/null)
+          for l in "${(@f)st}"; do
+            case "$l" in
+              "# branch.ab "*)
+                ab=(${=l#\# branch.ab })
+                ah=${ab[1]#+}
+                bh=${ab[2]#-}
+                ;;
+              "#"*|"") ;;
+              *) dirty="*" ;;
+            esac
+          done
+          (( ah > 0 )) && up+="↑$ah"
+          (( bh > 0 )) && up+="↓$bh"
           tmp_file="${cache_file}.tmp.$$.$RANDOM"
           printf '%s|%s' "$dirty" "$up" > "$tmp_file" && mv -f "$tmp_file" "$cache_file"
         ) &!
@@ -238,7 +245,7 @@ if [ -n "$model" ]; then
   printf -v model_part ' \033[2m%s\033[0m' "$model_str"
 fi
 
-# 8. Context Window (精简为 75k/200k，彻底消除 >200k 转义问题)
+# 8. Context Window (精简为 75k/200k，基于剩余百分比着色)
 ctx_part=""
 tok_str=""
 if [ -n "$used_tok" ] && [ "$used_tok" != "0" ] && [ "$used_tok" != "null" ]; then
@@ -268,12 +275,13 @@ if [ -n "$tok_str" ]; then
   rem_int=100
   [ -n "$remaining" ] && rem_int=${remaining%.*}
   if (( rem_int < 20 )); then
-    printf -v ctx_part ' \033[1;31m%s\033[0m' "$tok_str"
+    ctx_color='1;31'
   elif (( rem_int < 40 )); then
-    printf -v ctx_part ' \033[1;33m%s\033[0m' "$tok_str"
+    ctx_color='1;33'
   else
-    printf -v ctx_part ' \033[2m%s\033[0m' "$tok_str"
+    ctx_color='2'
   fi
+  printf -v ctx_part ' \033[%sm%s\033[0m' "$ctx_color" "$tok_str"
 fi
 
 # 9. 订阅用量（5 小时窗口）：存在 rate_limits 即为订阅账号
@@ -299,8 +307,8 @@ if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
     printf -v rl_part ' \033[2m5h:%d%%\033[0m' "$rl_int"
   fi
 
-  # 7 天用量及重置倒计时（≥50% 显示，≥80% 红色并附带重置时间）
-  if [[ "$rl7d" =~ ^[0-9.]+$ ]] && (( ${rl7d%.*} >= 50 )); then
+  # 7 天用量及重置倒计时（常驻显示；≥50% 黄色，≥80% 红色并附带重置时间）
+  if [[ "$rl7d" =~ ^[0-9.]+$ ]]; then
     rl7d_int=${rl7d%.*}
     reset_7d_str=""
     if (( rl7d_int >= 80 )) && [[ "$rl7d_reset" =~ ^[0-9]+$ ]]; then
@@ -318,8 +326,10 @@ if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
 
     if (( rl7d_int >= 80 )); then
       printf -v _rl7d ' \033[1;31m7d:%d%%%s\033[0m' "$rl7d_int" "$reset_7d_str"
-    else
+    elif (( rl7d_int >= 50 )); then
       printf -v _rl7d ' \033[1;33m7d:%d%%\033[0m' "$rl7d_int"
+    else
+      printf -v _rl7d ' \033[2m7d:%d%%\033[0m' "$rl7d_int"
     fi
     rl_part+="$_rl7d"
   fi
@@ -343,11 +353,13 @@ elif [ "$cache_observed" = "true" ]; then
   printf -v cache_part ' \033[33mcache:cold\033[0m'
 fi
 
-# Cache Miss 击穿告警（最有价值，避免额度隐形消耗）
+# Cache Miss 击穿告警（最有价值，避免额度隐形消耗；misses 为会话累计值，仅在最近 15 分钟内发生过 miss 时显示）
 miss_part=""
-if [[ "$cache_misses" =~ ^[0-9]+$ ]] && (( cache_misses > 0 )); then
+cache_last_miss=${cache_last_miss%.*}
+if [[ "$cache_misses" =~ ^[0-9]+$ ]] && (( cache_misses > 0 )) && \
+   [[ "$cache_last_miss" =~ ^[0-9]+$ ]] && (( EPOCHSECONDS - cache_last_miss <= 900 )); then
   if [ -n "$cache_miss_causes" ]; then
-    printf -v miss_part ' \033[33mmiss:%d(%s)\033[0m' "$cache_misses" "${cache_miss_causes:0:20}"
+    printf -v miss_part ' \033[33mmiss:%d(%s)\033[0m' "$cache_misses" "$cache_miss_causes"
   else
     printf -v miss_part ' \033[33mmiss:%d\033[0m' "$cache_misses"
   fi
@@ -383,53 +395,41 @@ fi
 # ---------------------------------------------------------
 # 15. 响应式宽度自适应 (COLUMNS Responsive Engine)
 # ---------------------------------------------------------
-# 纯 zsh 剥离 ANSI 码计算可见长度 (0 子进程)
-calc_len() {
+# 预留 2 列给 Claude Code 内置间距
+avail=$(( term_cols - 2 ))
+
+# 拼接整行并按终端显示宽度计算可见长度（${(m)#} 将中文/⚡ 等宽字符计为 2 列；直接赋值，无 subshell）
+assemble_line() {
   local esc=$'\e'
-  local plain="${1//${esc}\[[0-9;]#m/}"
-  echo ${#plain}
+  cur_line="${dir_part}${stack_part}${branch_part}${agent_part}${model_part}${ctx_part}${rl_part}${cache_part}${miss_part}${lines_part}${mode_part}${cost_part}${session_part}"
+  local plain="${cur_line//${esc}\[[0-9;]#m/}"
+  cur_len=${(m)#plain}
 }
 
 # 优先级组合（从高到低）
 # 核心必备：dir + branch + ctx + rl + mode
-# 逐步降级：session_part -> stack_part -> lines_part -> miss_part -> cache_part -> model_part
-
-assemble_line() {
-  echo "${dir_part}${stack_part}${branch_part}${agent_part}${model_part}${ctx_part}${rl_part}${cache_part}${miss_part}${lines_part}${mode_part}${cost_part}${session_part}"
-}
-
-cur_line=$(assemble_line)
-cur_len=$(calc_len "$cur_line")
-
-if (( cur_len > term_cols )); then
-  session_part=""
-  cur_line=$(assemble_line)
-  cur_len=$(calc_len "$cur_line")
+# 逐步降级：session_part -> stack_part -> lines_part -> cache_part -> model_part -> miss_part -> agent_part -> 额度重置倒计时 -> 上下文 token 数
+assemble_line
+for p in session_part stack_part lines_part cache_part model_part miss_part agent_part; do
+  (( cur_len > avail )) || break
+  : ${(P)p::=}
+  assemble_line
+done
+if (( cur_len > avail )); then
+  rl_part="${rl_part//→[0-9dhm]##/}"
+  assemble_line
+fi
+if (( cur_len > avail )); then
+  ctx_part="$ctx_short"
+  assemble_line
 fi
 
-if (( cur_len > term_cols )); then
-  stack_part=""
-  cur_line=$(assemble_line)
-  cur_len=$(calc_len "$cur_line")
-fi
-
-if (( cur_len > term_cols )); then
-  lines_part=""
-  cur_line=$(assemble_line)
-  cur_len=$(calc_len "$cur_line")
-fi
-
-if (( cur_len > term_cols )); then
-  cache_part=""
-  miss_part=""
-  cur_line=$(assemble_line)
-  cur_len=$(calc_len "$cur_line")
-fi
-
-if (( cur_len > term_cols )); then
-  model_part=""
-  cur_line=$(assemble_line)
-  cur_len=$(calc_len "$cur_line")
+# 兜底：核心段仍超宽时截断目录名，保证右侧额度告警始终可见
+if (( cur_len > avail )); then
+  keep=$(( ${(m)#dir_str} - (cur_len - avail) - 1 ))
+  (( keep < 4 )) && keep=4
+  printf -v dir_part '\033[1;36m%s…\033[0m' "${dir_str:0:$keep}"
+  assemble_line
 fi
 
 printf '%s\n' "$cur_line"
