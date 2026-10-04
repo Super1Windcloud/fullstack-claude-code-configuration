@@ -31,3 +31,9 @@
     - 详细改动要点1
     - 详细改动要点2
     ```
+
+## 5. Bypass 模式与隔离沙盒契约
+- **审计日志追踪**：所有 Bash 执行流均静默记录至 `/tmp/claude_bypass_audit.log`，可通过 `tail -f /tmp/claude_bypass_audit.log` 实时监控后台执行轨迹。
+- **高危探索与破坏性重构必须使用 Worktree**：对涉及架构迁移、大范围模块重构或高风险依赖升级的任务，严禁直接在主工作树尝试，必须在 `--worktree` 隔离沙盒中启动；利用 `symlinkDirectories` 复用编译缓存，失败可直接无损销毁。
+- **核心私密资产仓库安全降级**：对涉及生产私钥、发布密钥或底层金融核心的仓库，可在项目根目录 `.claude/settings.json` 中配置 `"defaultMode": "ask"` 覆盖全局 bypass，实现分级管控。
+
