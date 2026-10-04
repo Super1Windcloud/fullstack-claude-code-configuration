@@ -139,24 +139,28 @@ is_sensitive_read() {
   # 明确放行 .env.example, .env.sample, .env.template, .env.dist
   [[ "$cmd" =~ \.env\.(example|sample|template|dist) ]] && return 1
 
-  local file_readers='(cat|head|tail|less|more|bat|cp)'
+  local file_readers='(cat|head|tail|less|more|bat|cp|mv|base64|xxd|hexdump|od|tar|zip|gzip|7z|bzip2)'
   local search_tools='(grep|rg|awk|sed)'
-  local all_readers='(cat|head|tail|grep|awk|less|more|bat|strings|rg|sed|jq|cp|source|\.)'
+  local all_readers='(cat|head|tail|grep|awk|less|more|bat|strings|rg|sed|jq|cp|mv|source|\.|base64|xxd|hexdump|od|openssl|tar|zip|gzip|7z|bzip2)'
 
   local env_cmd_pattern="${all_readers}[[:space:]]+([^[:space:]]+[[:space:]]+)*([^[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?([[:space:]\"'|;&]|$)"
   local global_configs='(\.npmrc|\.netrc|\.config/gh/|\.docker/config\.json|\.cargo/credentials|(~|\$HOME|/Users/[^/[:space:]]+)/\.gradle/gradle\.properties|\.(pem|p12|jks|keystore))([[:space:]"'\''|;&]|$)'
   local specific_key_files='([a-zA-Z0-9_.-]*[._-])?(rsa|dsa|ed25519|ecdsa|private|priv|secret|server|client|ssl|tls|cert|auth|jwt)[a-zA-Z0-9_.-]*\.key'
 
-  # 1. 命令行读取 .env
-  grep -Eq "${B}${env_cmd_pattern}" <<<"$cmd" && return 0
-  # 2. 命令行读取全局敏感凭据/证书
-  grep -Eq "${B}${all_readers}[[:space:]]+.*${global_configs}" <<<"$cmd" && return 0
-  # 3. 针对 *.key 文件读取（区分 cat 任意 key 与 rg/grep 的代码搜索模式）
-  grep -Eq "${B}${file_readers}[[:space:]]+.*\.key([[:space:]\"'|;&]|$)" <<<"$cmd" && return 0
-  grep -Eq "${B}${search_tools}[[:space:]]+.*${specific_key_files}([[:space:]\"'|;&]|$)" <<<"$cmd" && return 0
-  # 4. 内联代码执行读取
-  grep -Eq "${B}(python3?|node|ruby|perl)[[:space:]].*(open|read[a-zA-Z]*)\([\"'\'].*([^/[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?[\"'\']" <<<"$cmd" && return 0
-  grep -Eq "${B}(python3?|node|ruby|perl)[[:space:]].*(open|read[a-zA-Z]*)\([\"'\'].*(${global_configs}|${specific_key_files})" <<<"$cmd" && return 0
+  # 双重检查：原始命令与去引号命令（彻底免疫 .en""v、'id_'rsa 等字符串拼接逃逸）
+  local check_cmds=("$cmd" "${cmd//[\"\']/}")
+  for c in "${check_cmds[@]}"; do
+    # 1. 命令行读取/打包/重命名 .env
+    grep -Eq "${B}${env_cmd_pattern}" <<<"$c" && return 0
+    # 2. 命令行读取全局敏感凭据/证书
+    grep -Eq "${B}${all_readers}[[:space:]]+.*${global_configs}" <<<"$c" && return 0
+    # 3. 针对 *.key 文件读取（区分 cat 任意 key 与 rg/grep 的代码搜索模式）
+    grep -Eq "${B}${file_readers}[[:space:]]+.*\.key([[:space:]\"'|;&]|$)" <<<"$c" && return 0
+    grep -Eq "${B}${search_tools}[[:space:]]+.*${specific_key_files}([[:space:]\"'|;&]|$)" <<<"$c" && return 0
+    # 4. 内联代码执行读取
+    grep -Eq "${B}(python3?|node|ruby|perl)[[:space:]].*(open|read[a-zA-Z]*)\([\"'\'].*([^/[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?[\"'\']" <<<"$c" && return 0
+    grep -Eq "${B}(python3?|node|ruby|perl)[[:space:]].*(open|read[a-zA-Z]*)\([\"'\'].*(${global_configs}|${specific_key_files})" <<<"$c" && return 0
+  done
 
   return 1
 }
@@ -257,9 +261,10 @@ audit_command() {
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?reset[[:space:]].*--hard|git reset --hard 破坏性重置"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?clean[[:space:]].*-[a-zA-Z]*f|git clean -f 强制清除未跟踪文件"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?push([[:space:]].*)?[[:space:]](--force|--force-with-lease|-[a-zA-Z]*f([[:space:]]|$)|:[a-zA-Z0-9_.-]+|--tags)|git 强制推送或批量推送/删除 Tag"
-    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Dd]|--delete|-[a-zA-Z]*f|--force)([[:space:]]|$)|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制删除分支/Tag 或丢弃 Stash"
+    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Ddf]|--delete|--force)([[:space:]]|$)|checkout[[:space:]]+.*-B[[:space:]]+|switch[[:space:]]+.*-C[[:space:]]+|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制重置/删除分支、覆盖 Tag 或丢弃 Stash"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?remote[[:space:]]+(add|remove|rm|set-url)([[:space:]]|$)|添加、删除或修改 git 远程仓库配置"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?rebase[[:space:]]+.*-[a-zA-Z]*i|交互式 git rebase"
+    "${B}(history[[:space:]]+-c|rm[[:space:]]+.*\.zsh_history)|清除 Shell 历史命令记录 (Anti-forensics)"
     "${B}(scp|rsync|sftp)[[:space:]]+.*[a-zA-Z0-9_.-]+:[^[:space:]]+|向远程主机传输数据文件 (scp/rsync/sftp)"
     "${B}(nc|ncat|netcat|socat)[[:space:]]|原始网络 Socket 发送/监听操作 (nc/socat)"
     "${B}(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash|zsh)|管道直接执行远程未知脚本"
