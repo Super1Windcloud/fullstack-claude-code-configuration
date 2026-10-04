@@ -107,11 +107,18 @@
 | **系统底层** | `launchctl unload ...` | **ask** | ✅ 阻止卸载或关闭系统常驻后台守护服务 |
 | **系统底层** | `osascript -e 'display dialog ...'` | **ask** | ✅ 阻止通过 AppleScript 执行系统弹窗或宿主提权 |
 | **系统底层** | `defaults delete com.apple.finder` | **ask** | ✅ 阻止清除 macOS 用户 Defaults 系统偏好 |
-| **系统底层** | `tmutil delete /Volumes/Backup` | **ask** | ✅ 阻止删除 Time Machine 系统快照备份 |
+| **对外推送** | `git -c k=v push` / `git --git-dir=... push` | **ask** | ✅ **通用选项穿透**：全 options 参数任意穿透均能精确识别并拦截 |
+| **外部写入** | `gh api ... -f key=val` | **ask** | ✅ **小写 -f 兼容**：兼容小写 `-f` 隐式 POST 变更拦截 |
+| **制品/密钥** | `gh release upload` / `gh secret set` | **ask** | ✅ 阻止未经授权发布制品资产或写入云端密钥 |
+| **容器破坏** | `docker system prune -af` / `docker rm -f` | **ask** | ✅ 阻止强制销毁容器、数据卷或批量清空系统镜像 |
+| **环境泄露** | `printenv` / 独立 `env` | **ask** | ✅ 阻止导出全量系统环境变量与运行时 Token |
+| **落盘执行** | `curl -o i.sh ... && bash i.sh` | **ask** | ✅ 阻止将远程未知脚本落盘后立即执行 |
+| **MCP 写防御** | `mcp__figma__use_figma` (写操作) | **ask** | ✅ **MCP 状态变更防护**：拦截模型擅自批量修改设计稿或云端资源 |
 | **0ms 极速** | `git status` / `git -C /path status` / `git log -n 5` | **放行** | ✅ **0ms Fast-Path**：支持带 `-C` 路径参数瞬间放行 |
-| **0ms 极速** | `cargo check` | **放行** | ✅ **0ms Fast-Path**：Rust 语法增量检查瞬间放行 |
+| **0ms 极速** | `cargo build` / `cargo fmt` / `cargo check` | **放行** | ✅ **0 Fork 极速引擎**：耗时从 400ms 降至 20ms，Rust/Gradle 日常开发极速放行 |
 | **参数拦截** | `git diff --output=/tmp/evil.sh` | **ask** | ✅ **写参数排除**：排除 `--output` 任意文件写入风险 |
 | **自保放行** | `cat ~/.claude/settings.json` | **放行** | ✅ **0 误报**：纯读取配置命令正常无感放行 |
+| **范例放行** | `cat .env.example` / `cat .env.sample` | **放行** | ✅ **细分凭据防御**：放行无害模板文件，精准阻断真实敏感环境 |
 | **参数剥离** | `git commit -m "fix: cd to dir and just release"` | **放行** | ✅ **纯字面量剥离**：Commit 消息含关键词 0 误报 |
 
 ---
@@ -125,7 +132,8 @@
 ├── CLAUDE.md                  # 全栈工程防线与交付契约
 ├── install.sh                 # 一键快速安装与热更新脚本
 ├── hooks/                     # Claude Code 核心安全与格式化生命周期钩子
-│   ├── guard-bash.sh          # PreToolUse 递归解包深度审计与高危拦截引擎
+│   ├── guard-bash.sh          # PreToolUse 递归解包深度审计与 0 Fork 极速高危拦截引擎
+│   ├── guard-mcp.sh           # PreToolUse MCP 工具高危写操作与外部资源变更防线
 │   └── format-edited.sh       # PostToolUse 项目级单文件安全格式化与变更保护
 ├── .gitignore                 # 忽略运行时会话、缓存与历史数据
 └── README.md                  # 详细架构、攻防矩阵与说明文档

@@ -14,9 +14,16 @@
   },
   "permissions": {
     "deny": [
-      "Edit(~/.claude/settings*.json)",
       "Edit(**/.claude/settings*.json)",
       "Edit(~/.claude/hooks/**)",
+      "Read(~/.claude.json)",
+      "Edit(~/.claude.json)",
+      "Read(~/.pypirc)",
+      "Edit(~/.pypirc)",
+      "Read(~/.m2/settings.xml)",
+      "Edit(~/.m2/settings.xml)",
+      "Read(~/.config/op/**)",
+      "Edit(~/.config/op/**)",
       "Read(~/.npmrc)",
       "Edit(~/.npmrc)",
       "Read(~/.netrc)",
@@ -41,11 +48,16 @@
       "Edit(~/.gnupg/**)",
       "Read(**/.env)",
       "Edit(**/.env)",
-      "Read(**/.env.*)",
-      "Edit(**/.env.*)",
+      "Read(**/.env.local)",
+      "Edit(**/.env.local)",
+      "Read(**/.env.production)",
+      "Edit(**/.env.production)",
+      "Read(**/.env.development)",
+      "Edit(**/.env.development)",
+      "Read(**/.env.*.local)",
+      "Edit(**/.env.*.local)",
       "Read(~/.gradle/gradle.properties)",
       "Edit(~/.gradle/gradle.properties)",
-      "Read(**/local.properties)",
       "Edit(**/local.properties)",
       "Read(**/keystore.properties)",
       "Edit(**/keystore.properties)",
@@ -81,6 +93,15 @@
           {
             "type": "command",
             "command": "bash ~/.claude/hooks/guard-bash.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__(use_figma|create|batch|delete|upload_assets|generate_figma_design|create_.*|update_.*|delete_.*|modify_.*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/guard-mcp.sh"
           }
         ]
       }
