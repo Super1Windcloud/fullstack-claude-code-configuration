@@ -8,31 +8,28 @@
 
 ## ✨ 核心特性
 
-### 1. 丝滑权限管理与高危物理防线
+### 1. 丝滑权限管理与动静态物理硬防线 (Hooks & Permissions)
 * **日常操作 100% 免确认放行**：
   * 构建与单测：`./gradlew`、`cargo`、`pnpm/npm/bun`、`python3`、`swift` 等常规编译单测命令秒级放行。
   * 文件操作：常规代码编辑、文件写入、目录创建、全局文本/符号检索全自动流式执行。
-* **物理级高危操作精准拦截（触发 `ask` 强制人类确认）**：
-  * **文件破坏**：`rm *`、`rm -rf *`、`rmdir *`、`srm *`
-  * **Git 数据抹除**：`git reset --hard`、`git clean -fd`、`git push --force`、`git restore`、`git branch -D`
-  * **误发包与高危篡改**：`npm publish`、`cargo publish`、`cargo yank`、`sudo`、`chmod -R 777`、篡改 `/etc` 或 `~/.ssh`
-  * **设备与环境重置**：`adb uninstall`、`xcrun simctl erase`
-* **跨 SDK / 构建缓存免确认检索 (`additionalDirectories`)**：
-  * 预先授权项目父级工作区（如 `~/super`）、Android SDK (`~/Library/Android/sdk`)、Gradle 全局缓存 (`~/.gradle`)、Cargo Crates (`~/.cargo`)、Rustup (`~/.rustup`) 及前端包管理目录，彻底告别“超出工程目录读取确认”的弹窗打扰。
+* **PreToolUse 安全审计 Hook (`hooks/guard-bash.sh`)**：
+  * **复合命令智能拆分**：保留单双引号内部边界，按 `;`、`&&`、`||`、`|` 逐段解析，彻底解决多命令拼接（如 `git restore --staged a && git restore b`）的掩护逃逸漏洞。
+  * **Git 全局参数穿透解析**：精准处理 `-C "path with space"`、`--no-pager`、`-c key=value` 等任意 Git 全局前置参数，无死角拦截 `git reset --hard`、`git clean -f`、`git push --force` 与触碰工作区的 `git restore`。
+  * **安全目录白名单收紧**：递归删除仅对 basename 严格匹配构建产物（`target`、`dist`、`build`、`.gradle`、`node_modules` 等）或 `/tmp` 临时路径放行，杜绝父级路径包含 `build` 导致误放行的风险。
+* **PostToolUse 项目级单文件安全格式化 (`hooks/format-edited.sh`)**：
+  * 仅使用项目已配置的本地工具（Biome / Prettier / rustfmt / gofmt / ktlint），严禁主观全局强加；
+  * 保护存量未格式化历史代码，避免大面积无关 diff；失败时在 `/tmp/claude_format.log` 留存简短诊断。
 
 ### 2. 毫秒级异步非阻塞状态栏 (StatusLine)
-针对超大型 Monorepo（50,000+ 文件仓库如 Android 游戏主线）重构的高性能状态栏：
-* **彻底根除 I/O 卡顿（< 20ms）**：
-  * 采用直接读取 `.git/HEAD` 内存内容（0ms）；
-  * 脏状态扫描与上下游落差检测采用**后台异步刷新（`&!`）+ 缓存机制（3s TTL）**，终端回车即时响应，告别卡顿。
-* **Git Smart CWD 智能根锚定**：
-  * 处于多模块极深子目录时自动锚定仓库根目录（如 `Blockymods/.../feature`），消除路径刷屏。
-* **Git 特殊状态与分支透视**：
-  * 变基 `[rebase]`、合并中 `[merge]`、挑拣中 `[cherry-pick]` 显式状态告警，detached HEAD 自动降级为 7 位 commit hash。
-* **Token 双维度实时感知**：
-  * 紧凑单行展示「余量百分比 + 已消耗绝对量」，如 `ctx:85% (75k)`。
-  * 三色阶智能预警：> 40% 沉浸灰字，20%~40% **亮黄提醒**，< 20% **高亮红色告警**（提示及时 `/compact` 防止会话截断）。
-* **模式标识**：`⚡bypass` 醒目标记免确认极速放行模式。
+针对超大型 Monorepo 重构的高性能状态栏：
+* **彻底根除 I/O 卡顿与并发崩溃**：
+  * 采用原子排他锁与进程唯一临时文件重命名机制，彻底杜绝高频并发下的 `mv: No such file or directory`；
+  * 脏状态全面感知：同步覆盖暂存区、工作区修改以及**未跟踪文件（Untracked `??`）**。
+* **子代理协议标准解耦**：
+  * 移除容易引起协议不匹配的 `subagentStatusLine`，恢复官方原生子代理任务进度跟踪。
+* **全景 Token、推理与费用感知**：
+  * 补齐回退路径中的输入、创建与缓存读取 Token 完整和（避免被漏计为极小值）；
+  * 示例效果：`hyperscoop  git:main* ↑2  Claude 3.7 Sonnet·medium  剩余:60% 80k/200k  ⚡bypass  ~$1.23`（费用加 `~` 明确估算属性）。
 
 ### 3. 全栈 Worktree 依赖共享缓存
 * 配置 `worktree.symlinkDirectories: ["node_modules", ".gradle", "target", ".cargo"]`；
@@ -51,9 +48,12 @@
 ```text
 .
 ├── settings.json              # 核心配置文件（权限策略、Worktree 共享、IDE 协同）
-├── statusline-command.sh      # 毫秒级异步非阻塞定制状态栏脚本
+├── statusline-command.sh      # 毫秒级异步非阻塞定制状态栏脚本（防并发碰撞/全Token感知）
 ├── CLAUDE.md                  # 全栈工程防线与交付契约
 ├── install.sh                 # 一键快速安装与热更新脚本
+├── hooks/                     # Claude Code 核心安全与格式化生命周期钩子
+│   ├── guard-bash.sh          # PreToolUse 复合命令精准阻断与危险拦截引擎
+│   └── format-edited.sh       # PostToolUse 项目本地格式化与已有改动保护
 ├── .gitignore                 # 忽略运行时会话、缓存与历史数据
 └── README.md                  # 详细架构与说明文档
 ```

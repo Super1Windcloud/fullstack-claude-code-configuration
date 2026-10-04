@@ -18,8 +18,14 @@ chmod +x "${TARGET_DIR}/statusline-command.sh"
 echo "[2/3] Installing settings.json..."
 sed "s|~/|${HOME}/|g" "${SCRIPT_DIR}/settings.json" > "${TARGET_DIR}/settings.json"
 
-# 3. Install CLAUDE.md (Global engineering defense & delivery contract)
-echo "[3/3] Installing CLAUDE.md..."
+# 3. Install hooks (PreToolUse safety guard & PostToolUse auto format)
+echo "[3/4] Installing hooks..."
+mkdir -p "${TARGET_DIR}/hooks"
+cp -r "${SCRIPT_DIR}/hooks/"* "${TARGET_DIR}/hooks/"
+chmod +x "${TARGET_DIR}/hooks/"*.sh
+
+# 4. Install CLAUDE.md (Global engineering defense & delivery contract)
+echo "[4/4] Installing CLAUDE.md..."
 cp "${SCRIPT_DIR}/CLAUDE.md" "${TARGET_DIR}/CLAUDE.md"
 
 echo "=== Installation Completed Successfully! ==="
