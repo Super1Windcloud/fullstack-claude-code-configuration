@@ -1,44 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "respectGitignore": true,
   "env": {
-    "ANTHROPIC_BASE_URL": "https://aigo.hair",
+    "ANTHROPIC_BASE_URL": "https://api.wokey.ai",
     "ANTHROPIC_AUTH_TOKEN": "YOUR_ANTHROPIC_AUTH_TOKEN_HERE",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
     "ANTHROPIC_MODEL": "claude-opus-5-5"
   },
   "permissions": {
-    "defaultMode": "bypassPermissions",
-    "ask": [
-      "Bash(rm *)",
-      "Bash(rm -rf *)",
-      "Bash(rmdir *)",
-      "Bash(srm *)",
-      "Bash(git reset --hard*)",
-      "Bash(git clean -f*)",
-      "Bash(git push * --force*)",
-      "Bash(git push * -f*)",
-      "Bash(git restore *)",
-      "Bash(git branch -D *)",
-      "Bash(git checkout -- *)",
-      "Bash(npm publish*)",
-      "Bash(pnpm publish*)",
-      "Bash(yarn publish*)",
-      "Bash(cargo yank*)",
-      "Bash(cargo publish*)",
-      "Bash(adb uninstall*)",
-      "Bash(adb shell rm*)",
-      "Bash(xcrun simctl erase*)",
-      "Bash(pod deintegrate*)",
-      "Bash(sudo *)",
-      "Bash(chmod -R 777 *)",
-      "Bash(killall *)",
-      "Bash(kill -9 *)",
-      "Bash(dd *)",
-      "Bash(mkfs *)",
-      "Edit(//etc/*)",
-      "Edit(~/.ssh/*)"
-    ],
     "allow": [
       "Bash(*)",
       "Edit(*)",
@@ -193,14 +163,45 @@
       "Bash(echo *)",
       "Bash(printf *)"
     ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(rm -rf *)",
+      "Bash(rmdir *)",
+      "Bash(srm *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git restore *)",
+      "Bash(git branch -D *)",
+      "Bash(git checkout -- *)",
+      "Bash(npm publish*)",
+      "Bash(pnpm publish*)",
+      "Bash(yarn publish*)",
+      "Bash(cargo yank*)",
+      "Bash(cargo publish*)",
+      "Bash(adb uninstall*)",
+      "Bash(adb shell rm*)",
+      "Bash(xcrun simctl erase*)",
+      "Bash(pod deintegrate*)",
+      "Bash(sudo *)",
+      "Bash(chmod -R 777 *)",
+      "Bash(killall *)",
+      "Bash(kill -9 *)",
+      "Bash(dd *)",
+      "Bash(mkfs *)",
+      "Edit(//etc/*)",
+      "Edit(~/.ssh/*)"
+    ],
+    "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "~/super",
-      "~/Library/Android/sdk",
-      "~/.gradle",
-      "~/.cargo",
-      "~/.rustup",
-      "~/Library/Developer",
-      "~/Library/pnpm"
+      "/Users/super/super",
+      "/Users/super/Library/Android/sdk",
+      "/Users/super/.gradle",
+      "/Users/super/.cargo",
+      "/Users/super/.rustup",
+      "/Users/super/Library/Developer",
+      "/Users/super/Library/pnpm"
     ]
   },
   "statusLine": {
@@ -208,7 +209,9 @@
     "command": "zsh ~/.claude/statusline-command.sh"
   },
   "enabledPlugins": {
-    "figma@claude-plugins-official": true
+    "figma@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "claude-code-setup@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
@@ -218,17 +221,31 @@
       }
     }
   },
-  "effortLevel": "low",
-  "tui": "fullscreen",
-  "theme": "dark",
-  "showThinkingSummaries": true,
-  "showTurnDuration": true,
-  "wheelScrollAccelerationEnabled": true,
-  "terminalProgressBarEnabled": true,
-  "autoCompactEnabled": true,
-  "autoMemoryEnabled": true,
-  "respectGitignore": true,
-  "fileCheckpointingEnabled": true,
   "language": "zh-CN",
-  "skipDangerousModePermissionPrompt": true
+  "effortLevel": "low",
+  "tui": "default",
+  "autoMemoryEnabled": true,
+  "showThinkingSummaries": true,
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
+  "autoCompactEnabled": true,
+  "wheelScrollAccelerationEnabled": true,
+  "fileCheckpointingEnabled": true,
+  "showTurnDuration": true,
+  "terminalProgressBarEnabled": true,
+  "autoConnectIde": true,
+  "diffTool": "auto",
+  "worktree": {
+    "baseRef": "head",
+    "symlinkDirectories": [
+      "node_modules",
+      ".gradle",
+      "target",
+      ".cargo"
+    ]
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "zsh ~/.claude/statusline-command.sh"
+  }
 }
