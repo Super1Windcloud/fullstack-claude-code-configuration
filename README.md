@@ -28,9 +28,6 @@
   * 拦截 GitHub CLI 破坏性操作：`gh pr merge`、`gh release create`；
   * 拦截 Git 危险重置：`git checkout .`（无参数丢弃工作区）、`git push --force-with-lease`；
   * 拦截项目级发布脚本：`just (release|release_local|update_hash|upload|push_all)`。
-* **PostToolUse 项目级单文件安全格式化 (`hooks/format-edited.sh`)**：
-  * 仅使用项目已配置的本地工具（Biome / Prettier / rustfmt / gofmt / ktlint / ruff / black），严禁主观全局强加；
-  * 保护存量未格式化历史代码，避免大面积无关 diff；失败时在 `/tmp/claude_format.log` 留存简短诊断。
 
 ### 2. 极致性能非阻塞状态栏 (StatusLine v2.5)
 经过 Claude Code 2.1.285 深度源码级审计与零子进程响应式重构：
@@ -143,10 +140,9 @@
 ├── statusline-command.sh      # 零子进程异步响应式状态栏（Cache Miss 击穿感知/自适应降级/原子锁）
 ├── CLAUDE.md                  # 全栈工程防线与交付契约
 ├── install.sh                 # 一键快速安装与热更新脚本
-├── hooks/                     # Claude Code 核心安全与格式化生命周期钩子
+├── hooks/                     # Claude Code 核心安全防护生命周期钩子
 │   ├── guard-bash.sh          # PreToolUse 递归解包深度审计与 0 Fork 极速高危拦截引擎
-│   ├── guard-mcp.sh           # PreToolUse MCP 工具高危写操作与外部资源变更防线
-│   └── format-edited.sh       # PostToolUse 项目级单文件安全格式化与变更保护
+│   └── guard-mcp.sh           # PreToolUse MCP 工具高危写操作与外部资源变更防线
 ├── .gitignore                 # 忽略运行时会话、缓存与历史数据
 └── README.md                  # 详细架构、攻防矩阵与说明文档
 ```

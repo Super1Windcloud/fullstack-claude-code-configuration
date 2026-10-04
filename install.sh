@@ -23,7 +23,7 @@ if [ -f "${TARGET_DIR}/settings.json" ]; then
 fi
 sed "s|~/|${HOME}/|g" "${SCRIPT_DIR}/settings.json" > "${TARGET_DIR}/settings.json"
 
-# 3. Install hooks (PreToolUse safety guard, MCP guard & PostToolUse auto format)
+# 3. Install hooks (PreToolUse safety guard & MCP guard)
 echo "[3/4] Installing hooks..."
 mkdir -p "${TARGET_DIR}/hooks"
 mkdir -p -m 0700 "${TARGET_DIR}/logs"
