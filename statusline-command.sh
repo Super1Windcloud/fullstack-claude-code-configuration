@@ -1,8 +1,18 @@
 #!/bin/zsh
+# 高性能全栈异步非阻塞状态栏 (StatusLine Command)
+# 特性：
+# 1. 单次 JQ 流式提取（耗时 < 20ms）
+# 2. 全栈技术栈生态标签 (Stack Badges: [android]/[rust]/[pnpm]/[bun]/[yarn]/[python])
+# 3. 权限模式双模态实时显式感知 (⚡bypass 亮黄 vs 🛡️ask 安全绿)
+# 4. 0ms Git 根目录直读 + 3s TTL 异步原子缓存刷新 + 30s 僵死锁回收
+# 5. 上下文窗口与 Token 用量（80k/200k）、订阅 5h 用量及重置倒计时（→1h20m）
+# 6. 会话改动行数统计 (+45/-12) 与终端窄屏自适应
+
 input=$(cat)
+zmodload zsh/datetime 2>/dev/null
 
 # 1. Single-pass JQ with robust token fallback & effort level extraction
-IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h mode < <(echo "$input" | jq -r '
+IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h mode rl5h_reset rl7d lines_add lines_del < <(jq -r '
   [
     .cwd // "",
     (.model.display_name // .model.id // ""),
@@ -17,9 +27,17 @@ IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost rl5h mode <
     (.context_window.context_window_size // .context_window.size // ""),
     (.cost.total_cost_usd // ""),
     (.rate_limits.five_hour.used_percentage // ""),
-    (.permission_mode // .mode // "")
+    (.permission_mode // .mode // ""),
+    # resets_at 兼容 epoch 秒 / 毫秒 / ISO8601 字符串，统一转成 epoch 秒
+    (.rate_limits.five_hour.resets_at // "" |
+      if type == "number" then (if . > 1e12 then (. / 1000 | floor) else floor end)
+      elif type == "string" and . != "" then (try (sub("\\.[0-9]+"; "") | sub("[+-]00:00$"; "Z") | fromdateiso8601) catch "")
+      else "" end),
+    (.rate_limits.seven_day.used_percentage // ""),
+    (.cost.total_lines_added // ""),
+    (.cost.total_lines_removed // "")
   ] | map(tostring) | join("\u001f")
-')
+' <<<"$input")
 
 [ -z "$cwd" ] && cwd="$PWD"
 
@@ -89,6 +107,11 @@ if [ -n "$git_dir" ] && [ -d "$git_dir" ]; then
 
     # Background async refresh if expired (with lock and unique tmp file to avoid collisions)
     if (( now - cache_mtime > 3 )); then
+      # 刷新子进程被 SIGKILL 或 git 卡死时 trap 不会执行，锁超过 30s 视为残留并回收
+      if [ -d "$lock_file" ]; then
+        lock_mtime=$(stat -f %m "$lock_file" 2>/dev/null || echo "$now")
+        (( now - lock_mtime > 30 )) && rmdir "$lock_file" 2>/dev/null
+      fi
       if mkdir "$lock_file" 2>/dev/null; then
         (
           trap 'rm -rf "$lock_file"' EXIT
@@ -143,10 +166,10 @@ else
 fi
 dir_part=$(printf '\033[1;36m%s\033[0m' "$dir_str")
 
-# 4. Tech stack badge (0ms fast check)
+# 4. Tech stack badge (0ms fast filesystem check)
 stack_part=""
 root_or_cwd="${git_root:-$cwd}"
-if [ -f "$root_or_cwd/settings.gradle" ] || [ -f "$root_or_cwd/settings.gradle.kts" ] || [ -f "$cwd/build.gradle" ] || [ -f "$cwd/build.gradle.kts" ]; then
+if [ -f "$root_or_cwd/settings.gradle" ] || [ -f "$root_or_cwd/settings.gradle.kts" ] || [ -f "$cwd/build.gradle" ] || [ -f "$cwd/build.gradle.kts" ] || [ -f "$root_or_cwd/Blockymods/settings.gradle.kts" ]; then
   stack_part=$(printf ' \033[32m[android]\033[0m')
 elif [ -f "$cwd/Cargo.toml" ] || [ -f "$root_or_cwd/Cargo.toml" ]; then
   stack_part=$(printf ' \033[33m[rust]\033[0m')
@@ -174,7 +197,7 @@ else
   branch_part=""
 fi
 
-# 5. Model name & reasoning effort
+# 6. Model name & reasoning effort
 model_str=""
 if [ -n "$model" ]; then
   if [ -n "$effort" ] && [ "$effort" != "null" ]; then
@@ -187,7 +210,7 @@ else
   model_part=""
 fi
 
-# 6. Context Window (Remaining Percentage + Token usage: 80k/200k)
+# 7. Context Window (Remaining Percentage + Token usage: 80k/200k)
 ctx_part=""
 if [ -n "$remaining" ]; then
   rem_int=${remaining%.*}
@@ -224,28 +247,58 @@ if [ -n "$remaining" ]; then
   fi
 fi
 
-# 7. 订阅用量（5 小时窗口）：存在 rate_limits 即为订阅账号，此时费用仅为 API 等价估算，不再显示
+# 8. 订阅用量（5 小时窗口）：存在 rate_limits 即为订阅账号，此时费用仅为 API 等价估算，不再显示
 rl_part=""
 if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
   rl_int=${rl5h%.*}
+  # 用量 ≥50% 时附加重置倒计时，如 5h:72%→1h20m
+  reset_str=""
+  if (( rl_int >= 50 )) && [[ "$rl5h_reset" =~ ^[0-9]+$ ]]; then
+    left=$(( rl5h_reset - EPOCHSECONDS ))
+    if (( left > 0 )); then
+      if (( left >= 3600 )); then
+        reset_str="→$(( left / 3600 ))h$(( left % 3600 / 60 ))m"
+      else
+        reset_str="→$(( (left + 59) / 60 ))m"
+      fi
+    fi
+  fi
   if (( rl_int >= 80 )); then
-    rl_part=$(printf ' \033[1;31m5h:%d%%\033[0m' "$rl_int")
+    rl_part=$(printf ' \033[1;31m5h:%d%%%s\033[0m' "$rl_int" "$reset_str")
   elif (( rl_int >= 50 )); then
-    rl_part=$(printf ' \033[1;33m5h:%d%%\033[0m' "$rl_int")
+    rl_part=$(printf ' \033[1;33m5h:%d%%%s\033[0m' "$rl_int" "$reset_str")
   else
     rl_part=$(printf ' \033[2m5h:%d%%\033[0m' "$rl_int")
   fi
+  # 7 天用量仅在 ≥50% 且终端宽度充足时出现
+  if [[ "$rl7d" =~ ^[0-9.]+$ ]] && (( ${rl7d%.*} >= 50 )) && (( ${COLUMNS:-120} >= 90 )); then
+    if (( ${rl7d%.*} >= 80 )); then
+      rl_part+=$(printf ' \033[1;31m7d:%d%%\033[0m' "${rl7d%.*}")
+    else
+      rl_part+=$(printf ' \033[1;33m7d:%d%%\033[0m' "${rl7d%.*}")
+    fi
+  fi
 fi
 
-# 8. 权限模式显式标识 (⚡bypass vs 🛡️ask)
+# 9. 本会话改动行数（对照"最小化变更"原则，窄屏自动省略）
+lines_part=""
+if (( ${COLUMNS:-120} >= 85 )); then
+  if [[ "$lines_add" =~ ^[0-9]+$ && "$lines_del" =~ ^[0-9]+$ ]] && (( lines_add + lines_del > 0 )); then
+    lines_part=$(printf ' \033[32m+%d\033[0m\033[2m/\033[0m\033[31m-%d\033[0m' "$lines_add" "$lines_del")
+  fi
+fi
+
+# 10. 权限模式显式双模态感知 (⚡bypass 亮黄 vs 🛡️ask 安全绿)
 mode_part=""
 if [[ "$mode" =~ "bypass" ]]; then
-  mode_part=$(printf ' \033[33m⚡bypass\033[0m')
+  mode_part=$(printf ' \033[1;33m⚡bypass\033[0m')
+elif [[ "$mode" =~ "plan" ]]; then
+  mode_part=$(printf ' \033[1;34m📋plan\033[0m')
 elif [ -n "$mode" ] && [ "$mode" != "null" ]; then
-  mode_part=$(printf ' \033[32m🛡️%s\033[0m' "$mode")
+  mode_part=$(printf ' \033[1;32m🛡️%s\033[0m' "$mode")
 fi
 
-# 9. Cost (Estimated with ~)
+# 11. Cost (Estimated with ~，仅非订阅账号显示)
 cost_part=""
 if [ -z "$rl_part" ] && [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
   cost_float=$(printf '%.2f' "$cost" 2>/dev/null)
@@ -254,4 +307,4 @@ if [ -z "$rl_part" ] && [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
   fi
 fi
 
-printf '%s%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$rl_part" "$mode_part" "$cost_part"
+printf '%s%s%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$rl_part" "$lines_part" "$mode_part" "$cost_part"
