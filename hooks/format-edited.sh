@@ -8,9 +8,14 @@ f=$(jq -r '.tool_input.file_path // ""')
 [ -f "$f" ] || exit 0
 dir=$(dirname "$f")
 
-LOG_FILE="/tmp/claude_format.log"
+LOG_DIR="$HOME/.claude/logs"
+LOG_FILE="$LOG_DIR/format.log"
 log_diag() {
-  printf '[%s] %s: %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$f" "$1" >> "$LOG_FILE"
+  [ -d "$LOG_DIR" ] || mkdir -p -m 0700 "$LOG_DIR" 2>/dev/null
+  if [ -f "$LOG_FILE" ] && [ "$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+    mv -f "$LOG_FILE" "$LOG_FILE.1" 2>/dev/null
+  fi
+  printf '[%s] %s: %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$f" "$1" >> "$LOG_FILE" 2>/dev/null
 }
 
 find_up() {
@@ -71,7 +76,7 @@ case "$f" in
 
   *.go)
     command -v gofmt >/dev/null || exit 0
-    head_is_clean gofmt && apply_format gofmt
+    (cd "$dir" && head_is_clean gofmt && apply_format gofmt)
     ;;
 
   *.ts|*.tsx|*.js|*.jsx|*.mjs|*.cjs|*.vue|*.svelte|*.css|*.scss|*.less|*.html|*.json|*.md|*.yaml|*.yml)
@@ -94,17 +99,17 @@ case "$f" in
 
   *.kt|*.kts)
     if command -v ktlint >/dev/null; then
-      head_is_clean ktlint --stdin -F -q && apply_format ktlint --stdin -F -q
+      (cd "$dir" && head_is_clean ktlint --stdin -F -q && apply_format ktlint --stdin -F -q)
     elif command -v ktfmt >/dev/null; then
-      head_is_clean ktfmt --stdin-format && apply_format ktfmt --stdin-format
+      (cd "$dir" && head_is_clean ktfmt --stdin-format && apply_format ktfmt --stdin-format)
     fi
     ;;
 
   *.py)
     if command -v ruff >/dev/null; then
-      head_is_clean ruff format --stdin-filename "$f" && apply_format ruff format --stdin-filename "$f"
+      (cd "$dir" && head_is_clean ruff format --stdin-filename "$f" && apply_format ruff format --stdin-filename "$f")
     elif command -v black >/dev/null; then
-      head_is_clean black -q - && apply_format black -q -
+      (cd "$dir" && head_is_clean black -q - && apply_format black -q -)
     fi
     ;;
 esac

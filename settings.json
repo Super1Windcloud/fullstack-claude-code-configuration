@@ -13,12 +13,6 @@
     "HOMEBREW_NO_AUTO_UPDATE": "1"
   },
   "permissions": {
-    "allow": [
-      "Bash",
-      "Edit(*)",
-      "Write(*)",
-      "WebFetch"
-    ],
     "deny": [
       "Edit(~/.claude/settings*.json)",
       "Edit(**/.claude/settings*.json)",
@@ -27,8 +21,12 @@
       "Edit(~/.npmrc)",
       "Read(~/.netrc)",
       "Edit(~/.netrc)",
+      "Read(~/.git-credentials)",
+      "Edit(~/.git-credentials)",
       "Read(~/.config/gh/**)",
       "Edit(~/.config/gh/**)",
+      "Read(~/.config/gcloud/**)",
+      "Edit(~/.config/gcloud/**)",
       "Read(~/.docker/config.json)",
       "Edit(~/.docker/config.json)",
       "Read(~/.cargo/credentials*)",
@@ -47,6 +45,10 @@
       "Edit(**/.env.*)",
       "Read(~/.gradle/gradle.properties)",
       "Edit(~/.gradle/gradle.properties)",
+      "Read(**/local.properties)",
+      "Edit(**/local.properties)",
+      "Read(**/keystore.properties)",
+      "Edit(**/keystore.properties)",
       "Read(**/*.pem)",
       "Edit(**/*.pem)",
       "Read(**/*.p12)",
@@ -56,9 +58,7 @@
       "Read(**/*.keystore)",
       "Edit(**/*.keystore)",
       "Edit(~/.zshrc)",
-      "Edit(~/.zshenv)",
-      "Bash(mkfs*)",
-      "Bash(dd *of=/dev/*)"
+      "Edit(~/.zshenv)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [

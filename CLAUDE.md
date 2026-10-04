@@ -35,5 +35,5 @@
 - **高危拦截与禁绕过**：高危命令由 PreToolUse 钩子拦截为 ask/deny；被拦截时**严禁改写命令形式绕过**，应向用户清晰说明意图后等待人工确认。
 - **对外操作明确授权**：对外可见操作（`git push`、`gh pr`、`gh release`、发布 crate/npm）即使在 bypass 模式下也仅在用户明确要求时执行。
 - **隔离工作树重构**：高风险探索与破坏性重构使用 `EnterWorktree` 工具或 `Agent(isolation: "worktree")` 在隔离工作树进行。
-- **私密仓库降级契约**：私密项目需在本地 `.claude/settings.json` 配置 `permissions.ask: ["Bash", "Edit", "Write", "WebFetch"]`（因全局 allow 会跨层合并，仅设置 `defaultMode` 无效，需显式用 ask 规则覆盖全局 allow）。
+- **私密项目降级**：私密敏感项目可直接在项目级 `.claude/settings.json` 中配置 `"defaultMode": "default"` 即可安全降级为默认交互确认模式。
 
