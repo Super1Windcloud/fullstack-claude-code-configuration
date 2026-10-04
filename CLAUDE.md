@@ -12,7 +12,6 @@
   - 前端项目：存在 `pnpm-lock.yaml` 时严禁调用 `npm install` 或 `yarn`；存在 `bun.lockb` 优先使用 `bun`；
   - Android 工程：统一使用项目根目录的 `./gradlew` 驱动目标模块局部编译，避免全包 assemble；
   - Rust 工程：优先使用 `cargo check` 或针对具体 crate 进行 `cargo test -p <pkg>`，避免无缓存全量构建。
-- **破坏性操作绝对防御**：严禁未经用户明确授权执行 `rm -rf`、`git reset --hard`、`git clean -fd`、`git push --force` 等不可逆指令。
 
 ## 3. 代码演进与最小代码集原则
 - **最小化变更**：恪守解决问题所需的最小代码集，严禁无故大面积格式化、批量重排导入或移动既有代码位置。
@@ -32,8 +31,9 @@
     - 详细改动要点2
     ```
 
-## 5. Bypass 模式与隔离沙盒契约
-- **审计日志追踪**：所有 Bash 执行流均静默记录至 `/tmp/claude_bypass_audit.log`，可通过 `tail -f /tmp/claude_bypass_audit.log` 实时监控后台执行轨迹。
-- **高危探索与破坏性重构必须使用 Worktree**：对涉及架构迁移、大范围模块重构或高风险依赖升级的任务，严禁直接在主工作树尝试，必须在 `--worktree` 隔离沙盒中启动；利用 `symlinkDirectories` 复用编译缓存，失败可直接无损销毁。
-- **核心私密资产仓库安全降级**：对涉及生产私钥、发布密钥或底层金融核心的仓库，可在项目根目录 `.claude/settings.json` 中配置 `"defaultMode": "ask"` 覆盖全局 bypass，实现分级管控。
+## 5. Bypass 模式契约
+- **高危拦截与禁绕过**：高危命令由 PreToolUse 钩子拦截为 ask/deny；被拦截时**严禁改写命令形式绕过**，应向用户清晰说明意图后等待人工确认。
+- **对外操作明确授权**：对外可见操作（`git push`、`gh pr`、`gh release`、发布 crate/npm）即使在 bypass 模式下也仅在用户明确要求时执行。
+- **隔离工作树重构**：高风险探索与破坏性重构使用 `EnterWorktree` 工具或 `Agent(isolation: "worktree")` 在隔离工作树进行。
+- **私密仓库降级契约**：私密项目需在本地 `.claude/settings.json` 配置 `permissions.ask: ["Bash", "Edit", "Write", "WebFetch"]`（因全局 allow 会跨层合并，仅设置 `defaultMode` 无效，需显式用 ask 规则覆盖全局 allow）。
 

@@ -1,10 +1,15 @@
 #!/bin/bash
-# PreToolUse(Bash) 全栈工程防线 (融合版)
-# 架构特性：
-# 1. 攻防实测与红队逃逸防御（递归解包、self-defense、数据外泄、精细化路径判定）
+# PreToolUse(Bash) 全栈工程防线 (工业加固版)
+#
+# 架构与运维说明：
+# 1. 攻防实测与红队逃逸防御（复合 flag 解包、精准词界自保护、数据外泄防护、对称式路径判定）
 # 2. 全栈工程生命周期契约（物理禁止裸 cd、多语言增量缓存保护、状态感知）
-# 3. 0ms 纯只读命令极速白名单短路
-# 4. 极简轻量审计日志（仅记录 ask/deny，无侵入式弹窗）
+# 3. 0ms 极速白名单短路（用于常规安全的本地开发与只读命令，消除感知延迟）
+# 4. 极简轻量审计日志：
+#    - 存储路径：~/.claude/logs/bypass_audit.log（目录权限 0700，日志权限 0600）
+#    - 记录策略：仅记录高危拦截（deny）与人工确认（ask），不记录日常放行以保护 I/O 与磁盘
+#    - 自动轮转：单文件大小超过 1MB 自动轮转为 .1 归档
+#    - 凭据脱敏：针对 Bearer Token、GitHub PAT 及 Base64 密钥做正则自动抹除脱敏
 
 raw_cmd=$(jq -r '.tool_input.command // ""')
 [ -z "$raw_cmd" ] && exit 0
@@ -18,7 +23,15 @@ decide() {
 
   if [ "$decision" != "allow" ]; then
     [ -d "$LOG_DIR" ] || mkdir -p -m 0700 "$LOG_DIR" 2>/dev/null
+    # 超过 1MB 自动轮转归档
+    if [ -f "$AUDIT_LOG" ] && [ "$(stat -f%z "$AUDIT_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+      mv -f "$AUDIT_LOG" "$AUDIT_LOG.1" 2>/dev/null
+    fi
     local clean_cmd="${raw_cmd//$'\n'/⏎}"
+    # 基础脱敏：掩盖常见 Token、密钥字面量
+    clean_cmd=$(sed -E -e 's/(bearer[[:space:]]+)[a-zA-Z0-9_\.~-]{10,}/\1[REDACTED]/gi' \
+                       -e 's/(ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,})/[REDACTED]/g' \
+                       -e 's/([A-Za-z0-9+/]{40,}={0,2})/[REDACTED]/g' <<<"$clean_cmd")
     printf '%s [PID:%s] [%s] %s (Reason: %s)\n' \
       "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$decision" "$clean_cmd" "$reason" >> "$AUDIT_LOG" 2>/dev/null &
   fi
@@ -29,11 +42,11 @@ decide() {
 }
 
 # ---------------------------------------------------------
-# 0. 极速前置白名单短路 (0ms Fast-Path for Pure Read-Only)
+# 0. 极速前置白名单短路 (0ms Fast-Path for Safe Local Development Commands)
 # ---------------------------------------------------------
-# 彻底杜绝 [\n] 字符集陷阱与危险子选项绕过
+# 仅对单条无管道重定向且参数完全安全的常规只读/开发命令瞬间放行
 branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
-fast_path_pat="^[[:space:]]*(git[[:space:]]+(status|diff|log|show|rev-parse|rev-list)|git[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|cargo[[:space:]]+(check|test|clippy|tree|metadata|--version)|(pnpm|npm|yarn|bun)[[:space:]]+(test|--version|list|build)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file)([[:space:]]|$)"
+fast_path_pat="^[[:space:]]*(git[[:space:]]+(status|diff|log|show|rev-parse|rev-list)|git[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|cargo[[:space:]]+(check|test|clippy|tree|metadata|--version)|(pnpm|bun)[[:space:]]+(test|--version|list|build)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file)([[:space:]]|$)"
 
 if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ [\;\&\|\>\<\`\$] ]]; then
   if [[ "$raw_cmd" =~ $fast_path_pat ]]; then
@@ -194,12 +207,11 @@ audit_command() {
   fi
 
   # ---------------------------------------------------------
-  # 5. P0：防线自我保护 (Self-Defense)
+  # 5. P0：防线自我保护 (Self-Defense) —— 精准目标匹配，放行纯读与管道查看
   # ---------------------------------------------------------
-  if grep -Eq '\.claude/(settings[^/]*\.json|hooks(/|$))' <<<"$cmd"; then
-    if grep -Eq "([>|]|${B}(sed|perl|python3?|node|ruby|tee|mv|cp|rm|chmod|chown|unlink|truncate)[[:space:]])" <<<"$cmd"; then
-      decide ask "危险操作需确认：正在尝试修改、覆盖或删除 Claude 核心配置/安全防线钩子"
-    fi
+  local self_defense_pat="(>>?[[:space:]]*|${B}(tee|mv|cp|rm|ln|chmod|chown|unlink|truncate)[[:space:]].*|${B}(sed|perl)[[:space:]]+-[a-zA-Z]*i.*)[^[:space:]]*\.claude/(settings[^/]*\.json|hooks)"
+  if grep -Eq "$self_defense_pat" <<<"$cmd"; then
+    decide ask "危险操作需确认：正在尝试修改、覆盖或删除 Claude 核心配置/安全防线钩子"
   fi
 
   # ---------------------------------------------------------
@@ -237,7 +249,7 @@ audit_command() {
   fi
 
   # ---------------------------------------------------------
-  # 10. P1：不可逆、对外发布与 Git 核心破坏操作
+  # 10. P1：不可逆、对外发布、外泄与 Git/GitHub 核心破坏操作
   # ---------------------------------------------------------
   local rules=(
     "${B}find[[:space:]].*(-delete|-exec[[:space:]]+(/bin/)?rm)|find 批量删除"
@@ -246,7 +258,10 @@ audit_command() {
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?clean[[:space:]].*-[a-zA-Z]*f|git clean -f 强制清除未跟踪文件"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?push([[:space:]].*)?[[:space:]](--force|--force-with-lease|-[a-zA-Z]*f([[:space:]]|$)|:[a-zA-Z0-9_.-]+|--tags)|git 强制推送或批量推送/删除 Tag"
     "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Dd]|--delete|-[a-zA-Z]*f|--force)([[:space:]]|$)|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制删除分支/Tag 或丢弃 Stash"
-    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?remote[[:space:]]+(remove|rm|set-url)([[:space:]]|$)|删除或修改 git 远程仓库配置"
+    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?remote[[:space:]]+(add|remove|rm|set-url)([[:space:]]|$)|添加、删除或修改 git 远程仓库配置"
+    "${B}git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?rebase[[:space:]]+.*-[a-zA-Z]*i|交互式 git rebase"
+    "${B}(scp|rsync|sftp)[[:space:]]+.*[a-zA-Z0-9_.-]+:[^[:space:]]+|向远程主机传输数据文件 (scp/rsync/sftp)"
+    "${B}(nc|ncat|netcat|socat)[[:space:]]|原始网络 Socket 发送/监听操作 (nc/socat)"
     "${B}(curl|wget)[[:space:]].*\|[[:space:]]*(sudo[[:space:]]+)?(sh|bash|zsh)|管道直接执行远程未知脚本"
     "${B}(sh|bash|zsh)[[:space:]]+<\([[:space:]]*(curl|wget)|进程替换直接执行远程脚本"
     "${B}(npm|pnpm|yarn|bun)[[:space:]]+publish|发布 npm 包"
@@ -255,7 +270,11 @@ audit_command() {
     "${B}killall[[:space:]]|${B}kill[[:space:]]+(-[^[:space:]]+[[:space:]]+)*-1([[:space:]]|$)|批量终止系统进程"
     "${B}chmod[[:space:]]+-R[[:space:]]+[0-7]*777|递归 777 全局权限修改"
     "${B}(adb[[:space:]].*(uninstall|shell[[:space:]]+rm)|xcrun[[:space:]]+simctl[[:space:]]+erase|pod[[:space:]]+deintegrate)|清除物理/模拟器设备应用或卸载 Pod 依赖"
-    "${B}gh[[:space:]]+(pr[[:space:]]+merge|release[[:space:]]+create|api[[:space:]]+-X[[:space:]]+(DELETE|PUT|PATCH))|GitHub PR 合并、发版或高危 API 调用"
+    "${B}gh[[:space:]]+gist[[:space:]]+create|创建 GitHub Gist 公开代码片段"
+    "${B}gh[[:space:]]+repo[[:space:]]+(delete|edit.*--visibility)|GitHub 仓库删除或修改公开性"
+    "${B}gh[[:space:]]+release[[:space:]]+(create|delete)|GitHub Release 创建或删除"
+    "${B}gh[[:space:]]+pr[[:space:]]+merge|GitHub PR 合并操作"
+    "${B}gh[[:space:]]+api[[:space:]]+.*(-X[[:space:]]+(POST|DELETE|PUT|PATCH)|--input|-F[[:space:]]|--field)|GitHub API 数据修改或外发操作"
     "${B}just[[:space:]]+(release|release_local|release_with_upx|update_hash|upload|push_all)|执行项目级全量发版并推送至所有远端"
   )
 
