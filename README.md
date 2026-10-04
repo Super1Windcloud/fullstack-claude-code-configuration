@@ -31,39 +31,36 @@
 
 ### 2. 极致性能非阻塞状态栏 (StatusLine v2.6)
 经过 Claude Code 2.1.285 深度源码级审计与零子进程响应式重构：
-* **双模态协议支持 (Dual Protocol Handler)**：
-  * 原生支持主状态栏与 `subagentStatusLine`（子代理 tasks 数组）协议；当子代理触发时自动返回符合官方规范的 `[{"id":"...","content":"⏳ build"}]` JSON 数组，彻底解决子代理状态栏协议不匹配导致的崩溃或乱码。
 * **零子进程原生 I/O 架构 (Zero-fork Architecture)**：
-  * 彻底消除命令替换子 shell：Git 探测改用 Zsh 原生 `read -r` 替代 `$(head)`，Token 格式化全面改用 Zsh 内置 `printf -v`；
-  * 使用 Zsh 内置 `zsh/stat`（`zstat +mtime`）替代外部 `stat` 二进制；
-  * Git 状态查询使用 `--no-optional-locks` 杜绝写入 `index.lock`，配合原子唯一临时文件与目录排他锁，彻底消除并发冲突。
+  * 单次 JQ 流式解析，全流程 0 次命令替换 subshell：Token 格式化全面改用 Zsh 内置 `printf -v`，Git 探测使用原生 `read -r` 消除 `$(head)`，整机执行耗时仅 ~20ms；
+  * Git 状态查询使用 `--no-optional-locks` 杜绝写入 `index.lock`，配合用户独立临时目录 `${TMPDIR:-/tmp}`、原子唯一随机临时文件与目录排他锁，彻底消除并发冲突。
+* **统一指标心智模型 (Unified Used Percentage)**：
+  * 状态栏内所有百分比（`ctx:38%`、`5h:55%`、`7d:85%`）全面统一为**已消耗比例**（越大越危险），杜绝“部分已用、部分剩余”的认知混乱；
+  * **上下文常驻保护**：宽屏显示 `ctx:38% 75k/200k`，窄屏平滑降级为 `ctx:38%` 并与目录、分支、5h 限额一同纳入核心常驻指标，绝不丢失。
 * **全栈工程生态精准标签 (Stack Badges)**：
   * 精准区分 Android 与 JVM 工程：只有当检测到 `AndroidManifest.xml` 时才标记 `[android]`，纯 Kotlin/JVM 项目标记为 `[gradle]`，彻底杜绝误标；
   * 原生支持 Bun 1.2+ 的文本格式 `bun.lock` 与旧版 `bun.lockb`；同时覆盖 `[rust]`、`[pnpm]`、`[yarn]`、`[npm]`、`[python:venv]`。
-* **主动心跳与定时刷新 (`refreshInterval: 10`)**：
-  * 在 `settings.json` 中配置 10 秒定时自动心跳渲染，无需等待键盘交互，后台 Git 状态刷新与 5h/7d 倒计时秒级呈现。
 * **深度真实遥测字段集成与 Bug 根除 (Telemetry & Awareness)**：
-  * **消除转义乱码**：移除冗余的 `>200k` 标记，消除了转义序列在某些终端被当作字面量输出的问题；
   * **COLUMNS 宽度失效防御**：自动修复子进程中 `COLUMNS=0` 导致的宽度自适应失效，智能回退与重载；
-  * **Worktree 与 Detached HEAD 感知**：精准解析官方 `workspace.git_worktree` 字符串名称显示 `[wt:<name>]`；分离头指针状态自动渲染为 `git:(hash)`；
+  * **分支排版与 Detached HEAD**：调整为规范排版 `git:main*↑2 [wt:x] [rebase]`；分离头指针状态自动渲染为 `git:(hash)`；
   * **极速模式**：识别真实存在的 `fast_mode` 字段并标记 `⚡fast`；
-  * **上下文去重紧凑展示**：精简为直观的 `75k/200k`，基于剩余额度动态切换颜色（<20% 红色加粗高亮、<40% 黄色、其余暗色），并在接口缺失百分比时自动公式兜底；
-  * **Prompt Cache 双态感知与 Miss 击穿告警**：
-    * 健康期暗色提示存活时长（如 `cache:42m`），充裕掌控；
-    * 剩余不足 10 分钟紧迫黄色高亮预警（如 `cache:8m`）；
-    * 曾命中缓存但本轮冷启动时显示 `cache:cold` 提醒；
-    * 实时捕捉 `prompt_cache.misses` 与击穿原因，高亮显示 `miss:2(tools,sys)`，严防环境变量或工具变更导致额度隐形消耗；
+  * **Prompt Cache 语义升级与低命中率告警**：
+    * 仅在**剩余存活不足 10 分钟时黄色预警**（如 `cache:8m`），消除常驻冗余噪音；
+    * 统一冷启动与过期显示为 `cache:cold`；
+    * 引入官方推荐 `prompt_cache.hit_ratio` 提取：命中率低于 70% 时黄色告警 `hit:62%`，直观反映缓存击穿；
+    * 实时捕捉 `prompt_cache.misses` 与击穿原因，高亮显示 `miss:2(tools,sys)`；
   * **7 天用量高阈值展示**：仅在 ≥50% 时浮现（如 `7d:55%`），≥80% 红色高亮并附带重置倒计时（如 `7d:82%→2d3h`），消除低用量噪音；
-  * **会话壁钟耗时**：当耗时超过 1 分钟时按需暗色浮现（如 `⏱️10m`）；
   * **Agent 标识**：在 `--agent` 模式下自动浮现青色 `@agent_name`（如 `@reviewer`）；
   * **响应式自适应布局引擎 (COLUMNS Responsive Engine)**：
     * 纯 Zsh 零子进程模式匹配 `${plain//${esc}\[[0-9;]#m/}` 与 `${(m)#}` 精确测量可见文本字符与宽字符（中文/Emoji）；
-    * 窄屏下按严格优先级平滑自动降级（`session` $\to$ `⏱️耗时` $\to$ `[rust]` $\to$ `+45/-12` $\to$ `7d` $\to$ `cache` $\to$ `model` $\to$ `miss` $\to$ `@agent` $\to$ 5h倒计时 $\to$ 目录名截断）；
-    * 核心指标（目录/分支/上下文/5h限额/模式）绝对常驻，杜绝折行破坏排版；
+    * 窄屏下按严格优先级平滑自动降级（`session` $\to$ `[rust]` $\to$ `+45/-12` $\to$ `cache` $\to$ `hit` $\to$ `model` $\to$ `7d` $\to$ `miss` $\to$ `@agent` $\to$ `ctx_tokens` $\to$ 5h倒计时 $\to$ 多字节安全目录截断）；
+    * 剔除低价值且宽度计算不准的 `⏱️` 耗时字符，核心指标绝对常驻不折行；
   * 完整布局示例：
     ```text
-    hyperscoop [rust] git:main*↑1 [wt:feat-auth] @reviewer Opus 3.7·high 75k/200k 5h:55%→1h6m 7d:82%→2d3h cache:42m +45/-12 ⏱️10m ⚡fast
+    hyperscoop [rust] git:main*↑1 [wt:feat-auth] @reviewer Opus 3.7·high ctx:38% 75k/200k 5h:55%→1h6m 7d:82%→2d3h cache:8m miss:2(tools,sys) +45/-12 ⚡fast
     ```
+* **配套自动化回归测试套件 (`statusline-command.test.sh`)**：
+  * 内置独立于被测脚本的宽度与降级断言套件，31 项测试全绿回归交付。
 
 ### 3. 全栈 Worktree 依赖共享缓存与环境增强
 * **依赖软链接隔离与安全共享**：配置 `worktree.symlinkDirectories: ["node_modules"]`。仅共享无状态/符号隔离的 `node_modules`；**坚决不共享 `target`、`.cargo` 与 `.gradle`**，彻底规避多分支并发 `cargo check` 或 Gradle 构建触发的文件锁死锁（File Lock Contention）与产物污染。
