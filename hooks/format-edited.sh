@@ -99,6 +99,14 @@ case "$f" in
       head_is_clean ktfmt --stdin-format && apply_format ktfmt --stdin-format
     fi
     ;;
+
+  *.py)
+    if command -v ruff >/dev/null; then
+      head_is_clean ruff format --stdin-filename "$f" && apply_format ruff format --stdin-filename "$f"
+    elif command -v black >/dev/null; then
+      head_is_clean black -q - && apply_format black -q -
+    fi
+    ;;
 esac
 
 exit 0

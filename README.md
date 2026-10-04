@@ -17,23 +17,30 @@
   * **Git 全局参数穿透解析**：精准处理 `-C "path with space"`、`--no-pager`、`-c key=value` 等任意 Git 全局前置参数，无死角拦截 `git reset --hard`、`git clean -f`、`git push --force` 与触碰工作区的 `git restore`。
   * **安全目录白名单收紧**：递归删除仅对 basename 严格匹配构建产物（`target`、`dist`、`build`、`.gradle`、`node_modules` 等）或 `/tmp` 临时路径放行，杜绝父级路径包含 `build` 导致误放行的风险。
 * **PostToolUse 项目级单文件安全格式化 (`hooks/format-edited.sh`)**：
-  * 仅使用项目已配置的本地工具（Biome / Prettier / rustfmt / gofmt / ktlint），严禁主观全局强加；
+  * 仅使用项目已配置的本地工具（Biome / Prettier / rustfmt / gofmt / ktlint / ruff / black），严禁主观全局强加；
   * 保护存量未格式化历史代码，避免大面积无关 diff；失败时在 `/tmp/claude_format.log` 留存简短诊断。
 
 ### 2. 毫秒级异步非阻塞状态栏 (StatusLine)
 针对超大型 Monorepo 重构的高性能状态栏：
+* **全栈工程生态轻量标签 (Stack Badges)**：
+  * 0ms 自动感知当前工作区：`[android]`、`[rust]`、`[pnpm]`、`[bun]`、`[yarn]`、`[python:venv]`，避免全栈开发者用错包管理工具。
+* **Git Worktree 隔离沙盒显式标识**：
+  * 检测到 Worktree 沙盒时自动增加 `[wt]` 标记（如 `git:feature-xyz [wt]*`），避免混淆主仓库与隔离分支。
 * **彻底根除 I/O 卡顿与并发崩溃**：
   * 采用原子排他锁与进程唯一临时文件重命名机制，彻底杜绝高频并发下的 `mv: No such file or directory`；
   * 脏状态全面感知：同步覆盖暂存区、工作区修改以及**未跟踪文件（Untracked `??`）**。
-* **子代理协议标准解耦**：
-  * 移除容易引起协议不匹配的 `subagentStatusLine`，恢复官方原生子代理任务进度跟踪。
 * **全景 Token、推理与费用感知**：
   * 补齐回退路径中的输入、创建与缓存读取 Token 完整和（避免被漏计为极小值）；
-  * 示例效果：`hyperscoop  git:main* ↑2  Claude 3.7 Sonnet·medium  剩余:60% 80k/200k  ⚡bypass  ~$1.23`（费用加 `~` 明确估算属性）。
+  * 示例效果：`Blockymods [android] git:main* [wt] ↑2 Claude 3.7 Sonnet·medium 剩余:60% 80k/200k ⚡bypass ~$1.23`。
 
-### 3. 全栈 Worktree 依赖共享缓存
-* 配置 `worktree.symlinkDirectories: ["node_modules", ".gradle", "target", ".cargo"]`；
-* 在 Claude Code 中使用 `--worktree` 或并行分支开发时，多语言大型构建依赖目录通过软链接直接复用，**无需重复 `cargo build` 或 Gradle 重建索引，避免磁盘空间膨胀**。
+### 3. 全栈 Worktree 依赖共享缓存与环境增强
+* **依赖软链接共享**：配置 `worktree.symlinkDirectories: ["node_modules", ".gradle", ".cargo", "target"]`，Rust `target` 与 Gradle/Node 产物直接复用，秒级开分支免重复编译。
+* **环境变量强化**：
+  * `GRADLE_OPTS`: 默认开启 Gradle Daemon、并发编译与构建缓存，消除冷启动等待；
+  * `PAGER: cat`: 彻底避免 Git 命令进入 `less` 分页导致会话交互死锁；
+  * `FORCE_COLOR: 1` 与 `CARGO_TERM_COLOR: always`: 保持终端高亮色彩清晰。
+* **高危凭证深度防御**：
+  * 物理级硬阻断读取 Android 签名密钥（`*.jks`, `*.keystore`）与云原生证书（`~/.aws`, `~/.kube`, `~/.gnupg`）。
 
 ### 4. 全局工程交付契约 (CLAUDE.md)
 * **严禁裸 `cd`**：强制使用工具自带路径参数（如 `git -C <path>`、`pnpm --filter <pkg>`、`cargo --manifest-path <path>`），保护执行稳定性；

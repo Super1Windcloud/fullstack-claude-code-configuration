@@ -28,6 +28,7 @@ IFS=$'\x1f' read -r cwd model effort remaining used_tok max_tok cost mode < <(ec
 # 2. Fast Git inspection
 git_dir=""
 git_root=""
+is_worktree=0
 cur="$cwd"
 while [ -n "$cur" ] && [ "$cur" != "/" ]; do
   if [ -e "$cur/.git" ]; then
@@ -38,6 +39,7 @@ while [ -n "$cur" ] && [ "$cur" != "/" ]; do
         gd="${gitdir_line#gitdir: }"
         [[ "$gd" != /* ]] && gd="$cur/$gd"
         git_dir="$gd"
+        [[ "$gitdir_line" =~ "/worktrees/" || "$git_dir" =~ "/worktrees/" ]] && is_worktree=1
       fi
     else
       git_dir="$cur/.git"
@@ -143,10 +145,32 @@ else
 fi
 dir_part=$(printf '\033[1;36m%s\033[0m' "$dir_str")
 
-# 4. Branch rendering
+# 4. Tech stack badge (0ms fast check)
+stack_part=""
+root_or_cwd="${git_root:-$cwd}"
+if [ -f "$root_or_cwd/settings.gradle" ] || [ -f "$root_or_cwd/settings.gradle.kts" ] || [ -f "$cwd/build.gradle" ] || [ -f "$cwd/build.gradle.kts" ]; then
+  stack_part=$(printf ' \033[32m[android]\033[0m')
+elif [ -f "$cwd/Cargo.toml" ] || [ -f "$root_or_cwd/Cargo.toml" ]; then
+  stack_part=$(printf ' \033[33m[rust]\033[0m')
+elif [ -f "$cwd/pnpm-lock.yaml" ] || [ -f "$root_or_cwd/pnpm-lock.yaml" ]; then
+  stack_part=$(printf ' \033[35m[pnpm]\033[0m')
+elif [ -f "$cwd/bun.lockb" ] || [ -f "$root_or_cwd/bun.lockb" ]; then
+  stack_part=$(printf ' \033[35m[bun]\033[0m')
+elif [ -f "$cwd/yarn.lock" ] || [ -f "$root_or_cwd/yarn.lock" ]; then
+  stack_part=$(printf ' \033[34m[yarn]\033[0m')
+elif [ -f "$cwd/package.json" ] || [ -f "$root_or_cwd/package.json" ]; then
+  stack_part=$(printf ' \033[36m[npm]\033[0m')
+elif [ -f "$cwd/pyproject.toml" ] || [ -f "$cwd/requirements.txt" ] || [ -f "$root_or_cwd/pyproject.toml" ]; then
+  py_suffix=""
+  [ -n "$VIRTUAL_ENV" ] && py_suffix=":venv"
+  stack_part=$(printf ' \033[34m[python%s]\033[0m' "$py_suffix")
+fi
+
+# 5. Branch rendering (with Worktree awareness)
 if [ -n "$branch" ]; then
   state_str=""
-  [ -n "$git_state" ] && state_str=" $git_state"
+  (( is_worktree )) && state_str+=" [wt]"
+  [ -n "$git_state" ] && state_str+=" $git_state"
   branch_part=$(printf ' \033[1;35mgit:%s%s%s%s\033[0m' "$branch" "$git_dirty" "$state_str" "$upstream_status")
 else
   branch_part=""
@@ -218,4 +242,4 @@ if [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
   fi
 fi
 
-printf '%s%s%s%s%s%s\n' "$dir_part" "$branch_part" "$model_part" "$ctx_part" "$mode_part" "$cost_part"
+printf '%s%s%s%s%s%s%s\n' "$dir_part" "$stack_part" "$branch_part" "$model_part" "$ctx_part" "$mode_part" "$cost_part"

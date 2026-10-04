@@ -5,7 +5,11 @@
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
     "BASH_DEFAULT_TIMEOUT_MS": "600000",
-    "BASH_MAX_TIMEOUT_MS": "1800000"
+    "BASH_MAX_TIMEOUT_MS": "1800000",
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=true -Dorg.gradle.parallel=true -Dorg.gradle.caching=true",
+    "PAGER": "cat",
+    "FORCE_COLOR": "1",
+    "CARGO_TERM_COLOR": "always"
   },
   "permissions": {
     "allow": [
@@ -24,7 +28,12 @@
       "Read(**/.env)",
       "Read(**/.env.*)",
       "Bash(mkfs*)",
-      "Bash(dd *of=/dev/*)"
+      "Bash(dd *of=/dev/*)",
+      "Read(~/.aws/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.gnupg/**)",
+      "Read(**/*.jks)",
+      "Read(**/*.keystore)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
@@ -34,7 +43,9 @@
       "~/.cargo",
       "~/.rustup",
       "~/Library/Developer",
-      "~/Library/pnpm"
+      "~/Library/pnpm",
+      "~/Library/Java/JavaVirtualMachines",
+      "/tmp"
     ]
   },
   "hooks": {
@@ -65,7 +76,8 @@
     "symlinkDirectories": [
       "node_modules",
       ".gradle",
-      ".cargo"
+      ".cargo",
+      "target"
     ],
     "baseRef": "head"
   },
