@@ -2,11 +2,8 @@
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "respectGitignore": true,
   "env": {
-    "ANTHROPIC_BASE_URL": "https://api.wokey.ai",
-    "ANTHROPIC_AUTH_TOKEN": "YOUR_ANTHROPIC_AUTH_TOKEN_HERE",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
-    "ANTHROPIC_MODEL": "claude-opus-5-5"
+    "CLAUDE_CODE_ATTRIBUTION_HEADER": "0"
   },
   "permissions": {
     "allow": [
