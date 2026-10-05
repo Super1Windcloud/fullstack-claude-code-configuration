@@ -68,7 +68,8 @@ WRAP="(([\\/[:alnum:]_.-]*/)?(sudo|command|builtin|exec|nohup|env|nice|time|xarg
 # 仅对单条无管道重定向且参数完全安全的常规只读/开发命令瞬间放行（排除 --output 任意文件写参数）
 branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|-d|--delete|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
 tag_safe_opts='(-l|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-n[0-9]*|-d|--delete|--sort=[^;&|><`$]*|--format=[^;&|><`$]*|-v|--verify|-a[[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*([[:space:]]+-[m|F][[:space:]]+[^;&|><`$]+)?|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
-fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list|add|fetch|blame|ls-files|shortlog|describe|cat-file|check-ignore|show-branch|stash([[:space:]]+(list|show|pop|apply|push([[:space:]]+-[a-zA-Z0-9_.-]+)*))?|worktree([[:space:]]+(list|prune|add([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*))?|remote([[:space:]]+(-v|--verbose|show([[:space:]]+[^;&|><\`\$]+)*))?)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+tag([[:space:]]+${tag_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(checkout([[:space:]]+-b)?|switch([[:space:]]+-c)?)([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+commit([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+-[m|F][[:space:]]+[^;&|><\`\$]+$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version|build|fmt|run|doc|bench|expand|audit|add|update|search|info)|just([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+(test|check|lint|fmt|build|dev|run|bench|test-.*|check-.*))?$|(\./)?gradlew([[:space:]]+-D[^[:space:]]+)*[[:space:]]+(:?[a-zA-Z0-9_:-]+)+|(pnpm|bun|yarn|npm)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build|add|install|i|audit|outdated|update|run[[:space:]]+[a-zA-Z0-9_-]+)|(npx|pnpx|bunx)([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+(tsc|eslint|prettier|vitest|jest|biome|tailwind|turbo|next|vite|astro|vue-tsc)|go([[:space:]]+[a-zA-Z0-9_.-]+)*[[:space:]]+(test|build|vet|fmt|version|env|list|mod([[:space:]]+(tidy|verify|download))?)|rustc[[:space:]]+--version|swift([[:space:]]+(test|build|run|--version))?|xcodebuild([[:space:]]+(-showsdks|-version|-list))|docker([[:space:]]+(ps|images|logs|inspect|version|info)([[:space:]]+[^;&|><\`\$]+)*)|chmod[[:space:]]+[+]x[[:space:]]+[^;&|><\`\$]+|gh([[:space:]]+(pr|issue|run|workflow|repo|release)[[:space:]]+(view|list|status|diff|checks)|--version)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file|echo|printf|wc|tree|sort|uniq|head|tail|jq)([[:space:]]|$)"
+remote_safe_opts='(-v|--verbose|show([[:space:]]+[^;&|><`$]+)*|add[[:space:]]+[^;&|><`$]+|set-url[[:space:]]+[^;&|><`$]+)'
+fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list|add|fetch|blame|ls-files|shortlog|describe|cat-file|check-ignore|show-branch|stash([[:space:]]+(list|show|pop|apply|push([[:space:]]+-[a-zA-Z0-9_.-]+)*))?|worktree([[:space:]]+(list|prune|add([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*))?)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+tag([[:space:]]+${tag_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+remote([[:space:]]+${remote_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(checkout([[:space:]]+-b)?|switch([[:space:]]+-c)?)([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+commit([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+-[m|F][[:space:]]+[^;&|><\`\$]+$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version|build|fmt|run|doc|bench|expand|audit|add|update|search|info)|just([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+(test|check|lint|fmt|build|dev|run|bench|test-.*|check-.*))?$|(\./)?gradlew([[:space:]]+-D[^[:space:]]+)*[[:space:]]+(:?[a-zA-Z0-9_:-]+)+|(pnpm|bun|yarn|npm)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build|add|install|i|audit|outdated|update|create[[:space:]]+[a-zA-Z0-9_.-]+|dlx[[:space:]]+[a-zA-Z0-9_.-]+|run[[:space:]]+[a-zA-Z0-9_-]+)|(npx|pnpx|bunx)([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+(tsc|eslint|prettier|vitest|jest|biome|tailwind|turbo|next|vite|astro|vue-tsc)|go([[:space:]]+[a-zA-Z0-9_.-]+)*[[:space:]]+(test|build|vet|fmt|version|env|list|mod([[:space:]]+(tidy|verify|download))?)|rustc[[:space:]]+--version|swift([[:space:]]+(test|build|run|--version))?|xcodebuild([[:space:]]+(-showsdks|-version|-list))|docker([[:space:]]+(ps|images|logs|inspect|version|info)([[:space:]]+[^;&|><\`\$]+)*)|chmod[[:space:]]+[+]x[[:space:]]+[^;&|><\`\$]+|uv([[:space:]]+(add|remove|pip|run|sync|lock|tool|init)([[:space:]]+[^;&|><\`\$]+)*)?|poetry([[:space:]]+(add|install|run|check|update)([[:space:]]+[^;&|><\`\$]+)*)?|pip3?([[:space:]]+install([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*)|gh([[:space:]]+(pr|issue|run|workflow|repo|release)[[:space:]]+(view|list|status|diff|checks)|--version)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file|echo|printf|wc|tree|sort|uniq|head|tail|jq)([[:space:]]|$)"
 
 if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ ([\;\&\|\>\<\`\$]|--output) ]]; then
   # 进一步排除 publish / upload / -g 等高危字样及敏感凭据文件（确保敏感文件绝不走 Fast-Path 逃逸）
@@ -162,8 +163,8 @@ strip_commit_messages() {
 # 敏感凭据/密钥文件检测（纯原生零 Fork 引擎）
 is_sensitive_read() {
   local cmd="$1"
-  # 明确放行 .env.example, .env.sample, .env.template, .env.dist
-  [[ "$cmd" =~ \.env\.(example|sample|template|dist) ]] && return 1
+  # 明确放行 .env.example, .env.sample, .env.template, .env.dist, .env.development, .env.dev, .env.test
+  [[ "$cmd" =~ \.env\.(example|sample|template|dist|development|dev|test) ]] && return 1
 
   # 快速预筛：若完全不含任何敏感关键词，0ms 瞬间返回
   local kw_pat="(\.env|\.npmrc|\.netrc|\.git-credentials|\.config/(gh|gcloud|op)|\.docker/config\.json|\.cargo/credentials|\.ssh|\.aws|\.kube|\.gnupg|gradle\.properties|keystore|\.pypirc|\.m2/settings|\.pem|\.p12|\.jks|\.key)"
@@ -300,7 +301,11 @@ audit_command() {
     local staged_pat="--staged|(^|[[:space:]])-S([[:space:]]|$)"
     local worktree_pat="--worktree|(^|[[:space:]])-W([[:space:]]|$)"
     if [[ ! "$cmd" =~ $staged_pat || "$cmd" =~ $worktree_pat ]]; then
-      decide ask "危险操作需确认：git restore 会丢弃工作区改动"
+      # 仅当全局丢弃所有工作区（含 . 或 :/* 或 *）时才确认；单文件路径恢复正常放行
+      local wipe_all_pat="[[:space:]](\.|:\/\*|\*)([[:space:]]|$)"
+      if [[ "$cmd" =~ $wipe_all_pat ]]; then
+        decide ask "危险操作需确认：git restore 会全局丢弃所有工作区未提交改动"
+      fi
     fi
   fi
 
@@ -320,7 +325,7 @@ audit_command() {
     "${B}git${GIT_OPTS}clean[[:space:]].*-[a-zA-Z]*f|git clean -f 强制清除未跟踪文件"
     # Git 分支、Tag、Stash 强制重置
     "${B}git${GIT_OPTS}(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Df]|--force)([[:space:]]|$)|checkout[[:space:]]+.*-B[[:space:]]+|switch[[:space:]]+.*-C[[:space:]]+|tag[[:space:]]+.*(-[a-zA-Z]*f|--force)|stash[[:space:]]+(drop|clear))|强制重置/删除分支、强制覆盖 Tag 或丢弃 Stash"
-    "${B}git${GIT_OPTS}remote[[:space:]]+(add|remove|rm|set-url)([[:space:]]|$)|添加、删除或修改 git 远程仓库配置"
+    "${B}git${GIT_OPTS}remote[[:space:]]+(remove|rm)([[:space:]]|$)|删除 git 远程仓库配置"
     "${B}git${GIT_OPTS}rebase[[:space:]]+.*-[a-zA-Z]*i|交互式 git rebase"
     # Git 深度破坏操作
     "${B}git${GIT_OPTS}reflog[[:space:]]+expire|git reflog 清理不可逆操作"
@@ -332,7 +337,7 @@ audit_command() {
     "${B}git[[:space:]]+.*--output[[:space:]=]|git 带有 --output 任意文件写参数"
     # 对外推送与发版操作（含任意选项参数的 git push 与 PR）
     "${B}git${GIT_OPTS}push([[:space:]]|$)|git push 代码推送至远程仓库"
-    "${B}gh[[:space:]]+(pr|issue)[[:space:]]+(create|comment|close|reopen|review|edit)|GitHub PR/Issue 交互与写入操作"
+    "${B}gh[[:space:]]+pr[[:space:]]+(create|close)|GitHub PR 创建或关闭操作"
     "${B}gh[[:space:]]+pr[[:space:]]+merge|GitHub PR 合并操作"
     "${B}gh[[:space:]]+gist[[:space:]]+create|创建 GitHub Gist 公开代码片段"
     "${B}gh[[:space:]]+repo[[:space:]]+(create|delete|edit.*--visibility)|GitHub 仓库创建、删除或修改公开性"

@@ -78,7 +78,7 @@
 
 ---
 
-## 🛡️ 攻防基准自动化回归测试实测矩阵 (72/72 全项通过)
+## 🛡️ 攻防基准自动化回归测试实测矩阵 (86/86 全项通过)
 
 以下为使用自动化回归测试套件对融合加固版 `guard-bash.sh` 真实执行判定的完整实测输出（覆盖系统毁灭硬核 DENY、包装器穿透、命令替换提取、敏感凭据深度路径匹配、Git/系统层破坏拦截与引号误报消除）：
 
@@ -148,8 +148,14 @@
 | **开发进程急救** | `killall python3` / `killall bun` / `uvicorn` | **放行** | ✅ **消除过度防御**：放行 Python/Node/Web 开发服务进程重启，避免端口占用卡死 |
 | **脚本执行赋权** | `chmod +x ./gradlew` / `chmod +x script.sh` | **放行** | ✅ **0ms Fast-Path**：安全脚本可执行权限修改瞬间放行，严格守住 777 全局修改 |
 | **容器只读监控** | `docker ps` / `docker images` / `docker logs` | **放行** | ✅ **0ms Fast-Path**：容器状态查看与日志追踪瞬间放行，严格守住 push 与销毁 |
-| **开源信息检索** | `gh repo view` / `gh release list` | **放行** | ✅ **0ms Fast-Path**：GitHub 仓库元数据与发版列表查看瞬时放行 |
 | **原生开发编译** | `swift --version` / `xcodebuild -showsdks` | **放行** | ✅ **0ms Fast-Path**：macOS / iOS 原生开发编译工具信息查询瞬时放行 |
+| **现代包管极速** | `uv add` / `poetry add` / `pip install` | **放行** | ✅ **0ms Fast-Path**：现代 Python 工具链依赖操作瞬时放行，消灭开发摩擦 |
+| **项目脚手架** | `pnpm create vite` / `bun create` | **放行** | ✅ **0ms Fast-Path**：项目模板初始化与 dlx 极速直通放行 |
+| **测试配置放行** | `cat .env.development` / `cat .env.test` | **放行** | ✅ **消除过度防御**：放行本地开发与测试配置，严格拦截生产凭据 |
+| **远程地址绑定** | `git remote add` / `git remote set-url` | **放行** | ✅ **消除过度防御**：放行远端仓库关联与切换，仅拦截破坏性 rm 删除 |
+| **单文件安全回滚** | `git restore src/main.rs` vs `git restore .` | **放行 / ask** | ✅ **精细化工作区防线**：单文件调试撤销无感放行，全局丢弃所有修改拦截确认 |
+| **Issue 协同放行** | `gh issue create` / `gh issue comment` | **放行** | ✅ **消除过度防御**：放行 Issue 任务管理与进度留言，严格守住 PR merge 合并 |
+| **本地开发解封** | 本地 `.env` / `~/.gradle` / `~/.docker` | **放行** | ✅ **消除 hard deny 死锁**：移除本地开发配置硬阻断，保留绝对生产凭据红线 |
 
 ---
 
