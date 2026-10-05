@@ -159,6 +159,11 @@
 | **私网容器网络联调** | `curl -d @data.json http://192.168.1.50` | **放行 / ask** | ✅ **消除过度防御**：放行 RFC 1918 私网、Docker 桥接网段与内部域名，公网外泄严格拦截 |
 | **虚拟环境与缓存** | `rm -rf .venv` / `rm -rf .vite` | **放行** | ✅ **消除过度防御**：放行 Python 虚拟环境与前端开发缓存重建，严守源码目录 |
 | **开发工具链直通** | `cargo nextest` / `go run` / `pnpm link` | **放行** | ✅ **0ms Fast-Path**：高频多语言测试、运行与本地包软链瞬时放行 |
+| **开发守护进程急救** | `killall redis-server` / `ollama` / `tsc` | **放行** | ✅ **消除过度防御**：放行数据库、缓存、本地模型推理与语言编译服务进程急救，解决端口卡死 |
+| **规范模板配置放行** | `cat .env.defaults` / `cat .env.schema` | **放行** | ✅ **消除过度防御**：放行公共规范模板、架构 Schema 与 CI 配置，严格拦截真实私钥凭据 |
+| **容器移动开发直通** | `docker build` / `pod install` / `adb devices` | **放行** | ✅ **0ms Fast-Path**：Docker 本地构建运行、CocoaPods 与 Android ADB 调试高频指令极速放行 |
+| **分支重命名与修正** | `git branch -m` / `git commit --amend` | **放行** | ✅ **0ms Fast-Path**：安全分支改名、多参数 switch 与无编辑提交修正瞬时放行 |
+| **现代全栈框架工具** | `npx prisma` / `npx playwright` | **放行** | ✅ **0ms Fast-Path**：现代全栈 ORM、组件库与 E2E 自动化测试工具直通 |
 | **Issue 协同放行** | `gh issue create` / `gh issue comment` | **放行** | ✅ **消除过度防御**：放行 Issue 任务管理与进度留言，严格守住 PR merge 合并 |
 | **本地开发解封** | 本地 `.env` / `~/.gradle` / `~/.docker` | **放行** | ✅ **消除 hard deny 死锁**：移除本地开发配置硬阻断，保留绝对生产凭据红线 |
 
