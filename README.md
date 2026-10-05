@@ -129,6 +129,10 @@
 | **MCP 读放行** | `mcp__figma__use_figma` (只读操作) | **放行** | ✅ **消除过度防御**：只读检查设计稿或获取图层属性无阻碍放行 |
 | **API 读放行** | `gh api graphql -f query='...'` | **放行** | ✅ **消除过度防御**：放行只读 GraphQL 查询，仅在含 mutation 时拦截 |
 | **分支安全删** | `git branch -d feat` / `--delete` | **放行** | ✅ **消除过度防御**：放行 Git 原生安全删除，仅拦截大写 `-D` 与 `--force` |
+| **文档键放行** | `cat Presentation.key` / `sort.key` | **放行** | ✅ **消除过度防御**：精准收紧私钥正则，放行普通 Keynote 演示与数据键 |
+| **本地联调** | `curl -d @req.json http://localhost:3000` | **放行** | ✅ **消除过度防御**：放行 localhost/127.0.0.1 本地回环接口文件测试 |
+| **进程急救** | `killall node` / `killall cargo` | **放行** | ✅ **消除过度防御**：放行开发服务与编译进程急救，拦截系统级进程破坏 |
+| **产物清理** | `rm -rf coverage` / `rm -rf out` | **放行** | ✅ **消除过度防御**：扩充测试覆盖率、SvelteKit/Nuxt/Python 缓存安全清理 |
 | **0ms 极速** | `git status` / `git -C /path status` / `git log` | **放行** | ✅ **0ms Fast-Path**：支持带 `-C` 路径参数瞬间放行 |
 | **0ms 极速** | `git blame` / `git ls-files` / `cargo doc` | **放行** | ✅ **Fast-Path 扩充**：扩充代码走查与文档构建只读命令 |
 | **0ms 极速** | `cargo build` / `cargo fmt` / `cargo check` | **放行** | ✅ **0 Fork 极速引擎**：耗时从 400ms 降至 20ms，Rust/Gradle 日常开发极速放行 |

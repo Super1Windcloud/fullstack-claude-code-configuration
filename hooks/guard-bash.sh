@@ -69,7 +69,7 @@ if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ ([\;\&\|\>\<\`\$]|--output) ]]; t
 fi
 
 # rm 产物安全判定：仅当删除目标全为本地项目可再生构建产物或 /tmp 目录时放行
-SAFE_DIRS=" target node_modules dist build .gradle __pycache__ .next .turbo .pytest_cache .cache "
+SAFE_DIRS=" target node_modules dist build out coverage .gradle __pycache__ .next .turbo .svelte-kit .nuxt .mypy_cache .ruff_cache .tox htmlcov .pytest_cache .cache "
 rm_target_safe() {
   local t="${1//[\"\']/}" c comps
   t="${t%/\*}"; t="${t%/}"
@@ -172,7 +172,7 @@ is_sensitive_read() {
     [[ "$c" =~ $env_cmd_pattern ]] && return 0
     local read_global_pat="${B}${WRAP}${all_readers}[[:space:]]+.*${global_configs}"
     [[ "$c" =~ $read_global_pat ]] && return 0
-    local key_file_pat="${B}${WRAP}${file_readers}[[:space:]]+.*\.key([[:space:]\"'\''|;&]|$)"
+    local key_file_pat="${B}${WRAP}${file_readers}[[:space:]]+.*${specific_key_files}([[:space:]\"'\''|;&]|$)"
     [[ "$c" =~ $key_file_pat ]] && return 0
     local key_search_pat="${B}${WRAP}${search_tools}[[:space:]]+.*${specific_key_files}([[:space:]\"'\''|;&]|$)"
     [[ "$c" =~ $key_search_pat ]] && return 0
@@ -276,7 +276,11 @@ audit_command() {
   # ---------------------------------------------------------
   local exfil_pat="${B}(curl[[:space:]].*(-[a-zA-Z]*d|--data[a-z-]*|-F|--form)[[:space:]].*@|curl[[:space:]].*(-[a-zA-Z]*T|--upload-file)[[:space:]]|wget[[:space:]].*--post-file)"
   if [[ "$cmd" =~ $exfil_pat ]]; then
-    decide ask "危险操作需确认：正在尝试通过网络命令外发本地文件（curl/wget @file 或 -T）"
+    # 排除本地回环接口联调（向 localhost/127.0.0.1 发送本地测试数据）
+    local loopback_pat="(https?://)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?)(:[0-9]+)?(/|[[:space:]\"']|$)"
+    if [[ ! "$cmd" =~ $loopback_pat ]]; then
+      decide ask "危险操作需确认：正在尝试通过网络命令外发本地文件（curl/wget @file 或 -T）"
+    fi
   fi
 
   # ---------------------------------------------------------
@@ -371,6 +375,12 @@ audit_command() {
   # GitHub API GraphQL 只读查询免检：若为 gh api graphql 且不包含 mutation，则放行只读查询
   if [[ "$scan_cmd" =~ gh[[:space:]]+api[[:space:]]+graphql && ! "$scan_cmd" =~ mutation ]]; then
     scan_cmd="${scan_cmd//gh api graphql/gh_api_graphql_read_safe}"
+  fi
+
+  # 放行良性本地开发进程 killall（用于快速清理端口占用或卡死的编译/服务进程）
+  local dev_procs="(node|cargo|rust-analyzer|gradle|gradlew|vite|next|webpack|esbuild|watchman|adb)"
+  if [[ "$scan_cmd" =~ ${B}killall([[:space:]]+-[a-zA-Z0-9]+)*[[:space:]]+${dev_procs}([[:space:]]|$) ]]; then
+    scan_cmd="${scan_cmd//killall/killall_dev_safe}"
   fi
 
   # 快速预筛：若未命中任何危险操作关键字，0ms 瞬间放行

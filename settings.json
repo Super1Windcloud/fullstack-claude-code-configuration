@@ -52,8 +52,6 @@
       "Edit(**/.env.local)",
       "Read(**/.env.production)",
       "Edit(**/.env.production)",
-      "Read(**/.env.development)",
-      "Edit(**/.env.development)",
       "Read(**/.env.*.local)",
       "Edit(**/.env.*.local)",
       "Read(~/.gradle/gradle.properties)",
