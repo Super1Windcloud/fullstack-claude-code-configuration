@@ -11,15 +11,13 @@
 #    - 自动轮转：单文件大小超过 1MB 自动轮转为 .1 归档
 #    - 凭据脱敏：针对 Bearer Token、GitHub PAT 及 Base64 密钥做正则自动抹除脱敏
 
-# 0-Fork 极速两级输入提取 (Tier 1: 纯原生正则 0.05ms 解析; Tier 2: 复杂长命令回退 jq)
+# 0-Fork 极速两级输入提取 (Tier 1: 纯原生无转义命令 0.05ms 解析; Tier 2: 含转义/换行长命令直接调用 jq，杜绝回溯挂起)
 IFS= read -r -d '' input || true
 [ -z "$input" ] && exit 0
 
-pat_cmd='"command":[[:space:]]*"(([^"\\]|\\.)*)"'
-if [[ "$input" =~ $pat_cmd ]]; then
+pat_simple='"command":[[:space:]]*"([^"\\]+)"'
+if [[ "$input" =~ $pat_simple ]]; then
   raw_cmd="${BASH_REMATCH[1]}"
-  raw_cmd="${raw_cmd//\\\"/\"}"
-  raw_cmd="${raw_cmd//\\\\/\\}"
 else
   # 依赖缺失安全降级 (Fail-Closed: 若 jq 缺失则默认阻断，严防逃逸)
   command -v jq >/dev/null 2>&1 || {
@@ -57,8 +55,9 @@ decide() {
   exit 0
 }
 
-# 严格命令起始/连接边界正则（排除引号与空格，避免参数内部误伤）
-B='(^|[;&|(`\n]|\$\()[[:space:]]*'
+# 严格命令起始/连接边界正则（排除引号与空格，支持真实换行与字面量 \n，避免参数内部误伤）
+NL=$'\n'
+B="(^|[;&|(\`$NL]|\\\\n|\$\()[[:space:]]*"
 # 通用前导命令包装器（支持 sudo/command/builtin/exec/nohup/env/nice/time/xargs 及反斜杠转义）
 WRAP="(([\\/[:alnum:]_.-]*/)?(sudo|command|builtin|exec|nohup|env|nice|time|xargs)[[:space:]]+|\\\\)*"
 
@@ -96,6 +95,7 @@ rm_target_safe() {
 
 # git clean 安全判定：仅当带 -f/--force 且清理目标全为 safe 产物目录时放行
 git_clean_needs_confirm() {
+  [[ "$1" =~ git[[:space:]].*clean && "$1" =~ (-[a-zA-Z]*f|--force) ]] || return 1
   local seg toks i targets opts_done in_clean skip_next tk t
   while IFS= read -r seg; do
     [[ "$seg" =~ git[[:space:]].*clean && "$seg" =~ (-[a-zA-Z]*f|--force) ]] || continue
@@ -130,11 +130,12 @@ git_clean_needs_confirm() {
       [[ "$t" == "." || "$t" == "*" || "$t" == ":/*" ]] && return 0
       rm_target_safe "$t" || return 0
     done
-  done < <(tr ';&|\n' '\n\n\n\n' <<<"$1")
+  done < <(tr ";;&|$NL" "$NL$NL$NL$NL" <<<"$1")
   return 1
 }
 
 rm_needs_confirm() {
+  [[ "$1" =~ (^|[;&|[:space:]])(/bin/)?(rm|srm)([[:space:]]|$) ]] || return 1
   local seg toks i rec opts_done targets t
   while IFS= read -r seg; do
     read -ra toks <<<"$seg"
@@ -162,7 +163,7 @@ rm_needs_confirm() {
     ((rec)) || continue
     ((${#targets[@]})) || return 0
     for t in "${targets[@]}"; do rm_target_safe "$t" || return 0; done
-  done < <(tr ';&|\n' '\n\n\n\n' <<<"$1")
+  done < <(tr ";;&|$NL" "$NL$NL$NL$NL" <<<"$1")
   return 1
 }
 
@@ -251,10 +252,12 @@ audit_command() {
   [[ "$cmd" =~ $eval_pat ]] && audit_command "${BASH_REMATCH[1]}"
 
   # 提取 $(...) 与 `...` 内部命令递归审计（彻底防御双引号/Heredoc 内的命令替换逃逸）
-  if [[ "$cmd" =~ \$\((.+)\) ]]; then
+  local subshell_dollar_pat='\$\(([^)]+)\)'
+  local subshell_backtick_pat='`([^`]+)`'
+  if [[ "$cmd" =~ $subshell_dollar_pat ]]; then
     audit_command "${BASH_REMATCH[1]}"
   fi
-  if [[ "$cmd" =~ \`([^\`]+)\` ]]; then
+  if [[ "$cmd" =~ $subshell_backtick_pat ]]; then
     audit_command "${BASH_REMATCH[1]}"
   fi
 
@@ -435,6 +438,17 @@ audit_command() {
   local dev_procs="(node|cargo|rust-analyzer|gradle|gradlew|vite|next|webpack|esbuild|watchman|adb|python3?|uvicorn|bun|deno|nginx|caddy|emulator|redis-server|postgres|mongod|ollama|tsc|java|gunicorn|celery|flask|fastapi|ruby|puma|sidekiq|surreal|surrealdb)"
   if [[ "$scan_cmd" =~ ${B}killall([[:space:]]+-[a-zA-Z0-9]+)*[[:space:]]+${dev_procs}([[:space:]]|$) ]]; then
     scan_cmd="${scan_cmd//killall/killall_dev_safe}"
+  fi
+
+  # nc / ncat 本地与私网端口健康探测免检（-z 为 Zero-I/O 模式，无任何数据外发或监听风险）
+  local nc_probe_pat="${B}(nc|ncat|netcat)[[:space:]]+.*-[a-zA-Z]*z"
+  if [[ "$scan_cmd" =~ $nc_probe_pat ]]; then
+    local local_probe_pat="(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|10\.[0-9]+(\.[0-9]+){2}|172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]+\.[0-9]+|192\.168\.[0-9]+\.[0-9]+|[a-zA-Z0-9_.-]+\.(local|internal|test|example)|host\.docker\.internal)"
+    if [[ "$scan_cmd" =~ $local_probe_pat ]]; then
+      scan_cmd="${scan_cmd//nc/nc_probe_safe}"
+      scan_cmd="${scan_cmd//ncat/ncat_probe_safe}"
+      scan_cmd="${scan_cmd//netcat/netcat_probe_safe}"
+    fi
   fi
 
   # 快速预筛：若未命中任何危险操作关键字，0ms 瞬间放行

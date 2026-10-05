@@ -164,6 +164,8 @@
 | **容器移动开发直通** | `docker build` / `pod install` / `adb devices` | **放行** | ✅ **0ms Fast-Path**：Docker 本地构建运行、CocoaPods 与 Android ADB 调试高频指令极速放行 |
 | **分支重命名与修正** | `git branch -m` / `git commit --amend` | **放行** | ✅ **0ms Fast-Path**：安全分支改名、多参数 switch 与无编辑提交修正瞬时放行 |
 | **现代全栈框架工具** | `npx prisma` / `npx playwright` | **放行** | ✅ **0ms Fast-Path**：现代全栈 ORM、组件库与 E2E 自动化测试工具直通 |
+| **换行Cat语法误报** | `mkdir ...\ncat > file` / 多行脚本 | **放行** | ✅ **根因修复误报**：重构命令边界正则，彻底消除换行 `cat` 被错误粘合识别为 `ncat` 的致命误判 |
+| **端口健康探测放行** | `nc -z localhost 8080` vs `nc -l 8080` | **放行 / ask** | ✅ **消除过度防御**：放行本地与私有网络 Zero-I/O 端口探活（`-z`），严格拦截外部监听与反弹 Shell |
 | **Issue 协同放行** | `gh issue create` / `gh issue comment` | **放行** | ✅ **消除过度防御**：放行 Issue 任务管理与进度留言，严格守住 PR merge 合并 |
 | **本地开发解封** | 本地 `.env` / `~/.gradle` / `~/.docker` | **放行** | ✅ **消除 hard deny 死锁**：移除本地开发配置硬阻断，保留绝对生产凭据红线 |
 
