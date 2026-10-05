@@ -126,8 +126,13 @@
 | **环境泄露** | `printenv` / 独立 `env` | **ask** | ✅ 阻止导出全量系统环境变量与运行时 Token |
 | **落盘执行** | `curl -o i.sh ... && bash i.sh` | **ask** | ✅ 阻止将远程未知脚本落盘后立即执行 |
 | **MCP 写防御** | `mcp__figma__use_figma` (写操作) | **ask** | ✅ **MCP 状态变更防护**：拦截模型擅自批量修改设计稿或云端资源 |
-| **0ms 极速** | `git status` / `git -C /path status` / `git log -n 5` | **放行** | ✅ **0ms Fast-Path**：支持带 `-C` 路径参数瞬间放行 |
+| **MCP 读放行** | `mcp__figma__use_figma` (只读操作) | **放行** | ✅ **消除过度防御**：只读检查设计稿或获取图层属性无阻碍放行 |
+| **API 读放行** | `gh api graphql -f query='...'` | **放行** | ✅ **消除过度防御**：放行只读 GraphQL 查询，仅在含 mutation 时拦截 |
+| **分支安全删** | `git branch -d feat` / `--delete` | **放行** | ✅ **消除过度防御**：放行 Git 原生安全删除，仅拦截大写 `-D` 与 `--force` |
+| **0ms 极速** | `git status` / `git -C /path status` / `git log` | **放行** | ✅ **0ms Fast-Path**：支持带 `-C` 路径参数瞬间放行 |
+| **0ms 极速** | `git blame` / `git ls-files` / `cargo doc` | **放行** | ✅ **Fast-Path 扩充**：扩充代码走查与文档构建只读命令 |
 | **0ms 极速** | `cargo build` / `cargo fmt` / `cargo check` | **放行** | ✅ **0 Fork 极速引擎**：耗时从 400ms 降至 20ms，Rust/Gradle 日常开发极速放行 |
+| **0ms 极速** | `just test` / `just check` / `just lint` | **放行** | ✅ **本地流程放行**：本地日常辅助开发任务瞬间放行，严格守住 release 发版 |
 | **参数拦截** | `git diff --output=/tmp/evil.sh` | **ask** | ✅ **写参数排除**：排除 `--output` 任意文件写入风险 |
 | **自保放行** | `cat ~/.claude/settings.json` | **放行** | ✅ **0 误报**：纯读取配置命令正常无感放行 |
 | **范例放行** | `cat .env.example` / `cat .env.sample` | **放行** | ✅ **细分凭据防御**：放行无害模板文件，精准阻断真实敏感环境 |

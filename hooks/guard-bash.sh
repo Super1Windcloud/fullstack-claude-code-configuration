@@ -56,8 +56,8 @@ WRAP="(([\\/[:alnum:]_.-]*/)?(sudo|command|builtin|exec|nohup|env|nice|time|xarg
 # 0. 极速前置白名单短路 (0ms Fast-Path for Safe Local Development Commands)
 # ---------------------------------------------------------
 # 仅对单条无管道重定向且参数完全安全的常规只读/开发命令瞬间放行（排除 --output 任意文件写参数）
-branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
-fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list|add|fetch|tag)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+commit([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+-[m|F][[:space:]]+[^;&|><\`\$]+$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version|build|fmt|run)|(\./)?gradlew([[:space:]]+-D[^[:space:]]+)*[[:space:]]+(:?[a-zA-Z0-9_:-]+)+|(pnpm|bun|yarn|npm)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build|run[[:space:]]+[a-zA-Z0-9_-]+)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file|echo|printf|wc)([[:space:]]|$)"
+branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|-d|--delete|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
+fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list|add|fetch|tag|blame|ls-files|shortlog|describe|cat-file|check-ignore|show-branch)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+commit([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+-[m|F][[:space:]]+[^;&|><\`\$]+$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version|build|fmt|run|doc|bench|expand|audit)|just([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+(test|check|lint|fmt|build|dev|run|bench|test-.*|check-.*))?$|(\./)?gradlew([[:space:]]+-D[^[:space:]]+)*[[:space:]]+(:?[a-zA-Z0-9_:-]+)+|(pnpm|bun|yarn|npm)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build|run[[:space:]]+[a-zA-Z0-9_-]+)|gh([[:space:]]+(pr|issue|run|workflow)[[:space:]]+(view|list|status|diff|checks)|--version)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file|echo|printf|wc|tree|sort|uniq|head|tail|jq)([[:space:]]|$)"
 
 if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ ([\;\&\|\>\<\`\$]|--output) ]]; then
   # 进一步排除 publish / upload / -g 等高危字样
@@ -312,7 +312,7 @@ audit_command() {
     "${B}git${GIT_OPTS}reset[[:space:]].*--hard|git reset --hard 破坏性重置"
     "${B}git${GIT_OPTS}clean[[:space:]].*-[a-zA-Z]*f|git clean -f 强制清除未跟踪文件"
     # Git 分支、Tag、Stash 强制重置
-    "${B}git${GIT_OPTS}(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Ddf]|--delete|--force)([[:space:]]|$)|checkout[[:space:]]+.*-B[[:space:]]+|switch[[:space:]]+.*-C[[:space:]]+|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制重置/删除分支、覆盖 Tag 或丢弃 Stash"
+    "${B}git${GIT_OPTS}(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Df]|--force)([[:space:]]|$)|checkout[[:space:]]+.*-B[[:space:]]+|switch[[:space:]]+.*-C[[:space:]]+|tag[[:space:]]+-d|stash[[:space:]]+(drop|clear))|强制重置/删除分支、覆盖 Tag 或丢弃 Stash"
     "${B}git${GIT_OPTS}remote[[:space:]]+(add|remove|rm|set-url)([[:space:]]|$)|添加、删除或修改 git 远程仓库配置"
     "${B}git${GIT_OPTS}rebase[[:space:]]+.*-[a-zA-Z]*i|交互式 git rebase"
     # Git 深度破坏操作
@@ -368,6 +368,11 @@ audit_command() {
   # ---------------------------------------------------------
   # 11. 聚合单正则预筛 (Aggregated Regex Pre-filter)
   # ---------------------------------------------------------
+  # GitHub API GraphQL 只读查询免检：若为 gh api graphql 且不包含 mutation，则放行只读查询
+  if [[ "$scan_cmd" =~ gh[[:space:]]+api[[:space:]]+graphql && ! "$scan_cmd" =~ mutation ]]; then
+    scan_cmd="${scan_cmd//gh api graphql/gh_api_graphql_read_safe}"
+  fi
+
   # 快速预筛：若未命中任何危险操作关键字，0ms 瞬间放行
   local prefilter_keywords="find|xargs|git|gh|docker|brew|npm|pnpm|yarn|bun|gradle|gradlew|cargo|twine|just|history|scp|rsync|sftp|nc|ncat|socat|curl|wget|sudo|kill|chmod|adb|xcrun|pod|crontab|launchctl|osascript|defaults|tmutil"
   if [[ ! "$scan_cmd" =~ $prefilter_keywords ]]; then
