@@ -103,9 +103,13 @@
   "worktree": {
     "symlinkDirectories": [
       "node_modules",
-      ".cache"
+      ".cache",
+      "target",
+      ".gradle",
+      ".venv"
     ],
-    "baseRef": "head"
+    "baseRef": "head",
+    "bgIsolation": "none"
   },
   "statusLine": {
     "type": "command",
