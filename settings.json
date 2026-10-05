@@ -52,7 +52,6 @@
       "Edit(**/.env.*.local)",
       "Read(~/.gradle/gradle.properties)",
       "Edit(~/.gradle/gradle.properties)",
-      "Edit(**/local.properties)",
       "Read(**/keystore.properties)",
       "Edit(**/keystore.properties)",
       "Read(**/*.pem)",

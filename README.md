@@ -133,9 +133,12 @@
 | **进程急救** | `killall node` / `killall cargo` | **放行** | ✅ **消除过度防御**：放行开发服务与编译进程急救，拦截系统级进程破坏 |
 | **产物清理** | `rm -rf coverage` / `rm -rf out` | **放行** | ✅ **消除过度防御**：扩充测试覆盖率、SvelteKit/Nuxt/Python 缓存安全清理 |
 | **0ms 极速** | `git status` / `git -C /path status` / `git log` | **放行** | ✅ **0ms Fast-Path**：支持带 `-C` 路径参数瞬间放行 |
+| **0ms 极速** | `git checkout feat` / `git switch -c new` | **放行** | ✅ **Fast-Path 扩充**：安全分支检出与切换瞬时放行，排除 `.` 与强覆盖 |
 | **0ms 极速** | `git blame` / `git ls-files` / `cargo doc` | **放行** | ✅ **Fast-Path 扩充**：扩充代码走查与文档构建只读命令 |
+| **0ms 极速** | `cargo add` / `pnpm add` / `npm i` | **放行** | ✅ **Fast-Path 扩充**：项目工作区本地依赖添加瞬时放行，排除全局 `-g` |
 | **0ms 极速** | `cargo build` / `cargo fmt` / `cargo check` | **放行** | ✅ **0 Fork 极速引擎**：耗时从 400ms 降至 20ms，Rust/Gradle 日常开发极速放行 |
 | **0ms 极速** | `just test` / `just check` / `just lint` | **放行** | ✅ **本地流程放行**：本地日常辅助开发任务瞬间放行，严格守住 release 发版 |
+| **SDK 路径放行** | `cat local.properties` / 编辑路径 | **放行** | ✅ **消除过度防御**：放行 Android SDK 路径查看与修正，保留 keystore 签名防御 |
 | **参数拦截** | `git diff --output=/tmp/evil.sh` | **ask** | ✅ **写参数排除**：排除 `--output` 任意文件写入风险 |
 | **自配置放行** | `cat ~/.claude.json` / 编辑配置与 Hook | **放行** | ✅ **解除自我阉割**：放行 Claude 自身配置与 Hook 维护管理，敏捷热更新 |
 | **范例放行** | `cat .env.example` / `cat .env.sample` | **放行** | ✅ **细分凭据防御**：放行无害模板文件，精准阻断真实敏感环境 |
