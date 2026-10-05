@@ -78,7 +78,7 @@
 
 ---
 
-## 🛡️ 攻防基准自动化回归测试实测矩阵 (60/60 全项通过)
+## 🛡️ 攻防基准自动化回归测试实测矩阵 (61/61 全项通过)
 
 以下为使用自动化回归测试套件对融合加固版 `guard-bash.sh` 真实执行判定的完整实测输出（覆盖系统毁灭硬核 DENY、包装器穿透、命令替换提取、敏感凭据深度路径匹配、Git/系统层破坏拦截与引号误报消除）：
 
@@ -95,11 +95,11 @@
 | **凭据读取** | `cat ~/.ssh/id_rsa` / `cat ~/.aws/credentials` | **ask** | ✅ 阻止读取 SSH 私钥与 AWS 云厂商核心凭据 |
 | **凭据读取** | `cat ~/.kube/config` / `cat ~/.git-credentials` | **ask** | ✅ 阻止读取 Kubernetes 证书与 Git 明文密码 |
 | **凭据读取** | `cat ~/.config/gcloud/credentials.db` | **ask** | ✅ 阻止读取 Google Cloud CLI 登录数据库凭据 |
-| **凭据读取** | `cat local.properties` / `cat keystore.properties` | **ask** | ✅ 阻止读取 Android 私有 SDK 路径与签名证书密码 |
+| **凭据读取** | `cat keystore.properties` | **ask** | ✅ 阻止读取 Android 签名证书私有密码 |
 | **凭据读取** | `cat .env` / `grep -r API_KEY .env.local` | **ask** | ✅ 阻止搜索/读取工具调取敏感环境配置 |
 | **凭据读取** | `cat ~/.npmrc` / `cat ~/.config/gh/hosts.yml` | **ask** | ✅ 阻止读取全局 NPM/GitHub CLI 访问 Token 凭证 |
 | **凭据读取** | `cat < .env` / `source .env` | **ask** | ✅ 阻止 Shell 输入重定向与环境变量注入外泄 |
-| **产物清理** | `rm -rf target` | **放行** | ✅ 本地可再生构建产物目录安全快速清理 |
+| **产物清理** | `rm -rf target` / `rm -rf .output` | **放行** | ✅ 本地可再生构建产物与 Nitro/Nuxt/Parcel 目录安全快速清理 |
 | **目录删除** | `env rm -rf src` / `\rm -rf src` / `nice rm -rf src` | **ask** | ✅ **包装器统一**：env/nice/反斜杠包装的源码删除需确认 |
 | **解包穿透** | `git commit -m "$(git reset --hard)"` | **ask** | ✅ 提取 `-m` 双引号内命令替换子指令送审拦截 |
 | **解包穿透** | `sh -c "git reset --hard"` / `eval "rm -rf src"` | **ask** | ✅ 子 Shell 与 eval 内层危险指令精准命中 |
@@ -128,16 +128,19 @@
 | **MCP 读放行** | `mcp__figma__use_figma` (只读操作) | **放行** | ✅ **消除过度防御**：只读检查设计稿或获取图层属性无阻碍放行 |
 | **API 读放行** | `gh api graphql -f query='...'` | **放行** | ✅ **消除过度防御**：放行只读 GraphQL 查询，仅在含 mutation 时拦截 |
 | **分支安全删** | `git branch -d feat` / `--delete` | **放行** | ✅ **消除过度防御**：放行 Git 原生安全删除，仅拦截大写 `-D` 与 `--force` |
+| **Tag 覆盖防** | `git tag -d v1.0` vs `git tag -f v1.0` | **放行 / ask** | ✅ **消除过度防御**：放行本地安全删除本地 Tag，拦截强制覆盖 `-f/--force` |
 | **文档键放行** | `cat Presentation.key` / `sort.key` | **放行** | ✅ **消除过度防御**：精准收紧私钥正则，放行普通 Keynote 演示与数据键 |
 | **本地联调** | `curl -d @req.json http://localhost:3000` | **放行** | ✅ **消除过度防御**：放行 localhost/127.0.0.1 本地回环接口文件测试 |
 | **进程急救** | `killall node` / `killall cargo` | **放行** | ✅ **消除过度防御**：放行开发服务与编译进程急救，拦截系统级进程破坏 |
-| **产物清理** | `rm -rf coverage` / `rm -rf out` | **放行** | ✅ **消除过度防御**：扩充测试覆盖率、SvelteKit/Nuxt/Python 缓存安全清理 |
+| **产物清理** | `rm -rf coverage` / `rm -rf .output` | **放行** | ✅ **消除过度防御**：扩充测试覆盖率、Nitro/Nuxt/Parcel/SvelteKit 安全清理 |
 | **0ms 极速** | `git status` / `git -C /path status` / `git log` | **放行** | ✅ **0ms Fast-Path**：支持带 `-C` 路径参数瞬间放行 |
 | **0ms 极速** | `git checkout feat` / `git switch -c new` | **放行** | ✅ **Fast-Path 扩充**：安全分支检出与切换瞬时放行，排除 `.` 与强覆盖 |
-| **0ms 极速** | `git blame` / `git ls-files` / `cargo doc` | **放行** | ✅ **Fast-Path 扩充**：扩充代码走查与文档构建只读命令 |
-| **0ms 极速** | `cargo add` / `pnpm add` / `npm i` | **放行** | ✅ **Fast-Path 扩充**：项目工作区本地依赖添加瞬时放行，排除全局 `-g` |
-| **0ms 极速** | `cargo build` / `cargo fmt` / `cargo check` | **放行** | ✅ **0 Fork 极速引擎**：耗时从 400ms 降至 20ms，Rust/Gradle 日常开发极速放行 |
-| **0ms 极速** | `just test` / `just check` / `just lint` | **放行** | ✅ **本地流程放行**：本地日常辅助开发任务瞬间放行，严格守住 release 发版 |
+| **0ms 极速** | `git stash list` / `git stash pop` | **放行** | ✅ **Fast-Path 扩充**：日常 Git Stash 暂存恢复操作 0ms 瞬间放行 |
+| **0ms 极速** | `git worktree list` / `git remote -v` | **放行** | ✅ **Fast-Path 扩充**：工作树与远程仓库安全查看瞬时放行 |
+| **0ms 极速** | `npx tsc --noEmit` / `go test ./...` | **放行** | ✅ **Fast-Path 扩充**：现代多语言前端与 Go 常用测试检查命令瞬时放行 |
+| **0ms 极速** | `cargo update` / `pnpm audit` | **放行** | ✅ **Fast-Path 扩充**：依赖审计与更新瞬时放行，排除全局 `-g` |
+| **Fast-Path 防** | `head -n 5 .env` | **ask** | ✅ **防逃逸加固**：Fast-Path 前置排除所有敏感凭据文件，防止短路漏检 |
+| **Maven 读放行** | `Read(~/.m2/settings.xml)` | **放行** | ✅ **消除过度防御**：放行 Maven 镜像读取分析，解决国内依赖拉取排查死锁 |
 | **SDK 路径放行** | `cat local.properties` / 编辑路径 | **放行** | ✅ **消除过度防御**：放行 Android SDK 路径查看与修正，保留 keystore 签名防御 |
 | **参数拦截** | `git diff --output=/tmp/evil.sh` | **ask** | ✅ **写参数排除**：排除 `--output` 任意文件写入风险 |
 | **自配置放行** | `cat ~/.claude.json` / 编辑配置与 Hook | **放行** | ✅ **解除自我阉割**：放行 Claude 自身配置与 Hook 维护管理，敏捷热更新 |

@@ -16,7 +16,6 @@
     "deny": [
       "Read(~/.pypirc)",
       "Edit(~/.pypirc)",
-      "Read(~/.m2/settings.xml)",
       "Edit(~/.m2/settings.xml)",
       "Read(~/.config/op/**)",
       "Edit(~/.config/op/**)",
@@ -68,6 +67,7 @@
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
       "~/super",
+      "~/demo",
       "~/Library/Android/sdk",
       "~/.gradle",
       "~/.cargo",
