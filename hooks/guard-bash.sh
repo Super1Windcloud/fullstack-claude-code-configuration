@@ -11,13 +11,23 @@
 #    - 自动轮转：单文件大小超过 1MB 自动轮转为 .1 归档
 #    - 凭据脱敏：针对 Bearer Token、GitHub PAT 及 Base64 密钥做正则自动抹除脱敏
 
-# 依赖缺失安全降级 (Fail-Closed: 若 jq 缺失则默认阻断，严防逃逸)
-command -v jq >/dev/null 2>&1 || {
-  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"安全防线依赖(jq)缺失，为防止绕过已默认阻断"}}'
-  exit 0
-}
+# 0-Fork 极速两级输入提取 (Tier 1: 纯原生正则 0.05ms 解析; Tier 2: 复杂长命令回退 jq)
+IFS= read -r -d '' input || true
+[ -z "$input" ] && exit 0
 
-raw_cmd=$(jq -r '.tool_input.command // ""')
+pat_cmd='"command":[[:space:]]*"(([^"\\]|\\.)*)"'
+if [[ "$input" =~ $pat_cmd ]]; then
+  raw_cmd="${BASH_REMATCH[1]}"
+  raw_cmd="${raw_cmd//\\\"/\"}"
+  raw_cmd="${raw_cmd//\\\\/\\}"
+else
+  # 依赖缺失安全降级 (Fail-Closed: 若 jq 缺失则默认阻断，严防逃逸)
+  command -v jq >/dev/null 2>&1 || {
+    printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"安全防线依赖(jq)缺失，为防止绕过已默认阻断"}}\n'
+    exit 0
+  }
+  raw_cmd=$(jq -r '.tool_input.command // ""' <<<"$input" 2>/dev/null)
+fi
 [ -z "$raw_cmd" ] && exit 0
 
 LOG_DIR="$HOME/.claude/logs"
@@ -39,11 +49,11 @@ decide() {
                        -e 's/(ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,})/[REDACTED]/g' \
                        -e 's/([A-Za-z0-9+/]{40,}={0,2})/[REDACTED]/g' <<<"$clean_cmd")
     printf '%s [PID:%s] [%s] %s (Reason: %s)\n' \
-      "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$decision" "$clean_cmd" "$reason" >> "$AUDIT_LOG" 2>/dev/null &
+      "$(date +'%Y-%m-%d %H:%M:%S')" "$$" "$decision" "$clean_cmd" "$reason" >> "$AUDIT_LOG" 2>&1 </dev/null &
   fi
 
-  jq -n --arg d "$decision" --arg r "$reason" \
-    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:$d,permissionDecisionReason:$r}}'
+  local safe_r="${reason//\"/\\\"}"
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"%s","permissionDecisionReason":"%s"}}\n' "$decision" "$safe_r"
   exit 0
 }
 

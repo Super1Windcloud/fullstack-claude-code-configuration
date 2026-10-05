@@ -169,7 +169,7 @@ if [ -n "$git_dir" ] && [ -d "$git_dir" ]; then
           (( bh > 0 )) && up+="↓$bh"
           tmp_file="${cache_file}.tmp.$$.$RANDOM"
           printf '%s|%s' "$dirty" "$up" > "$tmp_file" && mv -f "$tmp_file" "$cache_file"
-        ) &!
+        ) </dev/null >/dev/null 2>&1 &!
       fi
     fi
   fi
