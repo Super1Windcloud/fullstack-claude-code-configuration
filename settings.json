@@ -68,6 +68,10 @@
     "additionalDirectories": [
       "~/super",
       "~/demo",
+      "~/Projects",
+      "~/workspace",
+      "~/Code",
+      "~/dev",
       "~/Library/Android/sdk",
       "~/.gradle",
       "~/.cargo",

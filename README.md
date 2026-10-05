@@ -78,7 +78,7 @@
 
 ---
 
-## 🛡️ 攻防基准自动化回归测试实测矩阵 (61/61 全项通过)
+## 🛡️ 攻防基准自动化回归测试实测矩阵 (72/72 全项通过)
 
 以下为使用自动化回归测试套件对融合加固版 `guard-bash.sh` 真实执行判定的完整实测输出（覆盖系统毁灭硬核 DENY、包装器穿透、命令替换提取、敏感凭据深度路径匹配、Git/系统层破坏拦截与引号误报消除）：
 
@@ -144,8 +144,12 @@
 | **SDK 路径放行** | `cat local.properties` / 编辑路径 | **放行** | ✅ **消除过度防御**：放行 Android SDK 路径查看与修正，保留 keystore 签名防御 |
 | **参数拦截** | `git diff --output=/tmp/evil.sh` | **ask** | ✅ **写参数排除**：排除 `--output` 任意文件写入风险 |
 | **自配置放行** | `cat ~/.claude.json` / 编辑配置与 Hook | **放行** | ✅ **解除自我阉割**：放行 Claude 自身配置与 Hook 维护管理，敏捷热更新 |
-| **范例放行** | `cat .env.example` / `cat .env.sample` | **放行** | ✅ **细分凭据防御**：放行无害模板文件，精准阻断真实敏感环境 |
 | **参数剥离** | `git commit -m "fix: cd to dir and just release"` | **放行** | ✅ **纯字面量剥离**：Commit 消息含关键词 0 误报 |
+| **开发进程急救** | `killall python3` / `killall bun` / `uvicorn` | **放行** | ✅ **消除过度防御**：放行 Python/Node/Web 开发服务进程重启，避免端口占用卡死 |
+| **脚本执行赋权** | `chmod +x ./gradlew` / `chmod +x script.sh` | **放行** | ✅ **0ms Fast-Path**：安全脚本可执行权限修改瞬间放行，严格守住 777 全局修改 |
+| **容器只读监控** | `docker ps` / `docker images` / `docker logs` | **放行** | ✅ **0ms Fast-Path**：容器状态查看与日志追踪瞬间放行，严格守住 push 与销毁 |
+| **开源信息检索** | `gh repo view` / `gh release list` | **放行** | ✅ **0ms Fast-Path**：GitHub 仓库元数据与发版列表查看瞬时放行 |
+| **原生开发编译** | `swift --version` / `xcodebuild -showsdks` | **放行** | ✅ **0ms Fast-Path**：macOS / iOS 原生开发编译工具信息查询瞬时放行 |
 
 ---
 
