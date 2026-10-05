@@ -154,6 +154,11 @@
 | **测试配置放行** | `cat .env.development` / `cat .env.test` | **放行** | ✅ **消除过度防御**：放行本地开发与测试配置，严格拦截生产凭据 |
 | **远程地址绑定** | `git remote add` / `git remote set-url` | **放行** | ✅ **消除过度防御**：放行远端仓库关联与切换，仅拦截破坏性 rm 删除 |
 | **单文件安全回滚** | `git restore src/main.rs` vs `git restore .` | **放行 / ask** | ✅ **精细化工作区防线**：单文件调试撤销无感放行，全局丢弃所有修改拦截确认 |
+| **单文件精准检出** | `git checkout -- file` vs `git checkout .` | **放行 / ask** | ✅ **消除过度防御**：单文件历史检出与回退无感放行，全局抹除与 `-f` 强制覆盖拦截确认 |
+| **构建产物安全清理** | `git clean -fd target/` vs `git clean -fd` | **放行 / ask** | ✅ **精细化清理防线**：清理 safe 构建产物目录无感放行，仓库级全局未跟踪清除拦截确认 |
+| **私网容器网络联调** | `curl -d @data.json http://192.168.1.50` | **放行 / ask** | ✅ **消除过度防御**：放行 RFC 1918 私网、Docker 桥接网段与内部域名，公网外泄严格拦截 |
+| **虚拟环境与缓存** | `rm -rf .venv` / `rm -rf .vite` | **放行** | ✅ **消除过度防御**：放行 Python 虚拟环境与前端开发缓存重建，严守源码目录 |
+| **开发工具链直通** | `cargo nextest` / `go run` / `pnpm link` | **放行** | ✅ **0ms Fast-Path**：高频多语言测试、运行与本地包软链瞬时放行 |
 | **Issue 协同放行** | `gh issue create` / `gh issue comment` | **放行** | ✅ **消除过度防御**：放行 Issue 任务管理与进度留言，严格守住 PR merge 合并 |
 | **本地开发解封** | 本地 `.env` / `~/.gradle` / `~/.docker` | **放行** | ✅ **消除 hard deny 死锁**：移除本地开发配置硬阻断，保留绝对生产凭据红线 |
 

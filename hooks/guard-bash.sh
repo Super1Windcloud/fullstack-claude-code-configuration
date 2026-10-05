@@ -69,7 +69,7 @@ WRAP="(([\\/[:alnum:]_.-]*/)?(sudo|command|builtin|exec|nohup|env|nice|time|xarg
 branch_safe_opts='(--show-current|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-a|-r|-v{1,2}|-d|--delete|--format=[^;&|><`$]*|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
 tag_safe_opts='(-l|--list([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?|-n[0-9]*|-d|--delete|--sort=[^;&|><`$]*|--format=[^;&|><`$]*|-v|--verify|-a[[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*([[:space:]]+-[m|F][[:space:]]+[^;&|><`$]+)?|[a-zA-Z0-9_][a-zA-Z0-9_./-]*)'
 remote_safe_opts='(-v|--verbose|show([[:space:]]+[^;&|><`$]+)*|add[[:space:]]+[^;&|><`$]+|set-url[[:space:]]+[^;&|><`$]+)'
-fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list|add|fetch|blame|ls-files|shortlog|describe|cat-file|check-ignore|show-branch|stash([[:space:]]+(list|show|pop|apply|push([[:space:]]+-[a-zA-Z0-9_.-]+)*))?|worktree([[:space:]]+(list|prune|add([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*))?)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+tag([[:space:]]+${tag_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+remote([[:space:]]+${remote_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(checkout([[:space:]]+-b)?|switch([[:space:]]+-c)?)([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+commit([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+-[m|F][[:space:]]+[^;&|><\`\$]+$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version|build|fmt|run|doc|bench|expand|audit|add|update|search|info)|just([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+(test|check|lint|fmt|build|dev|run|bench|test-.*|check-.*))?$|(\./)?gradlew([[:space:]]+-D[^[:space:]]+)*[[:space:]]+(:?[a-zA-Z0-9_:-]+)+|(pnpm|bun|yarn|npm)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build|add|install|i|audit|outdated|update|create[[:space:]]+[a-zA-Z0-9_.-]+|dlx[[:space:]]+[a-zA-Z0-9_.-]+|run[[:space:]]+[a-zA-Z0-9_-]+)|(npx|pnpx|bunx)([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+(tsc|eslint|prettier|vitest|jest|biome|tailwind|turbo|next|vite|astro|vue-tsc)|go([[:space:]]+[a-zA-Z0-9_.-]+)*[[:space:]]+(test|build|vet|fmt|version|env|list|mod([[:space:]]+(tidy|verify|download))?)|rustc[[:space:]]+--version|swift([[:space:]]+(test|build|run|--version))?|xcodebuild([[:space:]]+(-showsdks|-version|-list))|docker([[:space:]]+(ps|images|logs|inspect|version|info)([[:space:]]+[^;&|><\`\$]+)*)|chmod[[:space:]]+[+]x[[:space:]]+[^;&|><\`\$]+|uv([[:space:]]+(add|remove|pip|run|sync|lock|tool|init)([[:space:]]+[^;&|><\`\$]+)*)?|poetry([[:space:]]+(add|install|run|check|update)([[:space:]]+[^;&|><\`\$]+)*)?|pip3?([[:space:]]+install([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*)|gh([[:space:]]+(pr|issue|run|workflow|repo|release)[[:space:]]+(view|list|status|diff|checks)|--version)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+unittest)|pytest|ls|pwd|whoami|uname|which|stat|file|echo|printf|wc|tree|sort|uniq|head|tail|jq)([[:space:]]|$)"
+fast_path_pat="^[[:space:]]*(git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(status|diff|log|show|rev-parse|rev-list|add|fetch|blame|ls-files|shortlog|describe|cat-file|check-ignore|show-branch|merge-base|merge[[:space:]]+--abort|rebase[[:space:]]+--abort|cherry-pick[[:space:]]+--abort|stash([[:space:]]+(list|show|pop|apply|push([[:space:]]+-[a-zA-Z0-9_.-]+)*))?|worktree([[:space:]]+(list|prune|add([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*))?)|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+branch([[:space:]]+${branch_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+tag([[:space:]]+${tag_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+remote([[:space:]]+${remote_safe_opts})?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+(checkout([[:space:]]+(-b|--))?|switch([[:space:]]+-c)?)([[:space:]]+[a-zA-Z0-9_][a-zA-Z0-9_./-]*)?[[:space:]]*$|git([[:space:]]+(-C|-c)[[:space:]]+[^[:space:]]+)*[[:space:]]+commit([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+-[m|F][[:space:]]+[^;&|><\`\$]+$|cargo([[:space:]]+--manifest-path[=[:space:]][^[:space:]]+|[[:space:]]+-p[[:space:]]+[^[:space:]]+)*[[:space:]]+(check|test|clippy|tree|metadata|--version|build|fmt|run|doc|bench|expand|audit|add|update|search|info|nextest([[:space:]]+run)?)|just([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+(test|check|lint|fmt|build|dev|run|bench|test-.*|check-.*|--list|-l|--summary))?$|(\./)?gradlew([[:space:]]+-D[^[:space:]]+)*[[:space:]]+(:?[a-zA-Z0-9_:-]+)+|(pnpm|bun|yarn|npm)([[:space:]]+--filter[[:space:]]+[^[:space:]]+)*[[:space:]]+(test|--version|list|build|add|install|i|audit|outdated|update|create[[:space:]]+[a-zA-Z0-9_.-]+|dlx[[:space:]]+[a-zA-Z0-9_.-]+|link([[:space:]]+[a-zA-Z0-9_.-]+)?|unlink([[:space:]]+[a-zA-Z0-9_.-]+)?|exec[[:space:]]+[a-zA-Z0-9_.-]+|run[[:space:]]+[a-zA-Z0-9_-]+)|(npx|pnpx|bunx)([[:space:]]+-[a-zA-Z0-9_.-]+)*[[:space:]]+(tsc|eslint|prettier|vitest|jest|biome|tailwind|turbo|next|vite|astro|vue-tsc)|go([[:space:]]+[a-zA-Z0-9_.-]+)*[[:space:]]+(test|build|run|vet|fmt|version|env|list|doc|generate|mod([[:space:]]+(tidy|verify|download))?)|rustc[[:space:]]+--version|swift([[:space:]]+(test|build|run|--version))?|xcodebuild([[:space:]]+(-showsdks|-version|-list))|docker([[:space:]]+(compose[[:space:]]+(ps|logs|config|version|port)|ps|images|logs|inspect|version|info)([[:space:]]+[^;&|><\`\$]+)*)|chmod[[:space:]]+([+]x|u[+]x|755|644)[[:space:]]+[^;&|><\`\$]+|uv([[:space:]]+(add|remove|pip|run|sync|lock|tool|init)([[:space:]]+[^;&|><\`\$]+)*)?|poetry([[:space:]]+(add|install|run|check|update)([[:space:]]+[^;&|><\`\$]+)*)?|pip3?([[:space:]]+(install|list|show|check|cache)([[:space:]]+-[a-zA-Z0-9_.-]+)*([[:space:]]+[^;&|><\`\$]+)*)|gh([[:space:]]+(pr|issue|run|workflow|repo|release)[[:space:]]+(view|list|status|diff|checks|checkout)|--version)|python3?[[:space:]]+(-V|--version|-m[[:space:]]+(unittest|pytest|py_compile))|(ruff|mypy|black|flake8|isort)([[:space:]]+[^;&|><\`\$]+)*|pytest|ls|pwd|whoami|uname|which|where|type|stat|file|echo|printf|wc|tree|sort|uniq|head|tail|jq|du|df|basename|dirname|realpath|readlink)([[:space:]]|$)"
 
 if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ ([\;\&\|\>\<\`\$]|--output) ]]; then
   # 进一步排除 publish / upload / -g 等高危字样及敏感凭据文件（确保敏感文件绝不走 Fast-Path 逃逸）
@@ -80,8 +80,8 @@ if [[ "$raw_cmd" != *$'\n'* && ! "$raw_cmd" =~ ([\;\&\|\>\<\`\$]|--output) ]]; t
   fi
 fi
 
-# rm 产物安全判定：仅当删除目标全为本地项目可再生构建产物或 /tmp 目录时放行
-SAFE_DIRS=" target node_modules dist build out coverage .gradle __pycache__ .next .turbo .svelte-kit .nuxt .mypy_cache .ruff_cache .tox htmlcov .pytest_cache .cache .angular .parcel-cache .docusaurus .output "
+# rm / clean 产物安全判定：仅当目标全为本地项目可再生构建产物或 /tmp 目录时放行
+SAFE_DIRS=" target node_modules dist build out coverage .gradle __pycache__ .next .turbo .svelte-kit .nuxt .mypy_cache .ruff_cache .tox htmlcov .pytest_cache .cache .angular .parcel-cache .docusaurus .output .venv venv .vite .astro .rollup.cache storybook-static "
 rm_target_safe() {
   local t="${1//[\"\']/}" c comps
   t="${t%/\*}"; t="${t%/}"
@@ -91,6 +91,46 @@ rm_target_safe() {
   [[ "$t" =~ ^(~|\$HOME|\$\{HOME\}|/Users/|/home/|/root/|/etc/|/var/|/usr/|/bin/|/sbin/) ]] && return 1
   IFS=/ read -ra comps <<<"$t"
   for c in "${comps[@]}"; do [[ "$SAFE_DIRS" == *" $c "* ]] && return 0; done
+  return 1
+}
+
+# git clean 安全判定：仅当带 -f/--force 且清理目标全为 safe 产物目录时放行
+git_clean_needs_confirm() {
+  local seg toks i targets opts_done in_clean skip_next tk t
+  while IFS= read -r seg; do
+    [[ "$seg" =~ git[[:space:]].*clean && "$seg" =~ (-[a-zA-Z]*f|--force) ]] || continue
+    read -ra toks <<<"$seg"
+    in_clean=0; opts_done=0; targets=(); skip_next=0
+    for ((i=0; i<${#toks[@]}; i++)); do
+      tk="${toks[i]}"
+      if ((in_clean == 0)); then
+        if [[ "$tk" == "clean" && $i -gt 0 ]]; then
+          in_clean=1
+        fi
+        continue
+      fi
+      if ((skip_next)); then
+        skip_next=0
+        continue
+      fi
+      if ((opts_done == 0)) && [[ "$tk" == -* ]]; then
+        if [[ "$tk" == "--" ]]; then
+          opts_done=1
+        elif [[ "$tk" == "-e" ]]; then
+          skip_next=1
+        fi
+        continue
+      fi
+      targets+=("$tk")
+    done
+
+    # 未指定任何具体路径（全局清理仓库）或指定了根/通配符，必须确认
+    ((${#targets[@]} == 0)) && return 0
+    for t in "${targets[@]}"; do
+      [[ "$t" == "." || "$t" == "*" || "$t" == ":/*" ]] && return 0
+      rm_target_safe "$t" || return 0
+    done
+  done < <(tr ';&|\n' '\n\n\n\n' <<<"$1")
   return 1
 }
 
@@ -280,9 +320,9 @@ audit_command() {
   # ---------------------------------------------------------
   local exfil_pat="${B}(curl[[:space:]].*(-[a-zA-Z]*d|--data[a-z-]*|-F|--form)[[:space:]].*@|curl[[:space:]].*(-[a-zA-Z]*T|--upload-file)[[:space:]]|wget[[:space:]].*--post-file)"
   if [[ "$cmd" =~ $exfil_pat ]]; then
-    # 排除本地回环接口联调（向 localhost/127.0.0.1 发送本地测试数据）
-    local loopback_pat="(https?://)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?)(:[0-9]+)?(/|[[:space:]\"']|$)"
-    if [[ ! "$cmd" =~ $loopback_pat ]]; then
+    # 排除本地回环接口、私有局域网/容器网络 (RFC 1918) 及本地内部域名联调
+    local local_net_pat="(https?://)?(localhost|127\.0\.0\.1|0\.0\.0\.0|\[?::1\]?|10\.[0-9]+(\.[0-9]+){2}|172\.(1[6-9]|2[0-9]|3[0-1])\.[0-9]+\.[0-9]+|192\.168\.[0-9]+\.[0-9]+|[a-zA-Z0-9_.-]+\.(local|internal|test|example)|host\.docker\.internal)(:[0-9]+)?(/|[[:space:]\"']|$)"
+    if [[ ! "$cmd" =~ $local_net_pat ]]; then
       decide ask "危险操作需确认：正在尝试通过网络命令外发本地文件（curl/wget @file 或 -T）"
     fi
   fi
@@ -309,9 +349,16 @@ audit_command() {
     fi
   fi
 
-  local git_checkout_wipe_pat="${B}${WRAP}git${GIT_OPTS}checkout[[:space:]]+(.*[[:space:]])?(\.|--|-[a-zA-Z]*f)([[:space:]]|$)"
+  local git_checkout_wipe_pat="${B}${WRAP}git${GIT_OPTS}checkout[[:space:]]+(.*[[:space:]])?((--[[:space:]]+)?(\.|:\/\*|\*)|-[a-zA-Z]*f|--force)([[:space:]]|$)"
   if [[ "$cmd" =~ $git_checkout_wipe_pat ]]; then
     decide ask "危险操作需确认：git checkout 会丢弃当前工作区未提交改动"
+  fi
+
+  local git_clean_pat="${B}${WRAP}git${GIT_OPTS}clean[[:space:]]"
+  if [[ "$cmd" =~ $git_clean_pat ]]; then
+    if git_clean_needs_confirm "$cmd"; then
+      decide ask "危险操作需确认：git clean -f 强制清除未跟踪文件"
+    fi
   fi
 
   # ---------------------------------------------------------
@@ -322,7 +369,6 @@ audit_command() {
     "${B}find[[:space:]].*(-delete|-exec[[:space:]]+(/bin/)?rm)|find 批量删除"
     "${B}xargs[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(/bin/)?rm([[:space:]]|$)|xargs 批量删除"
     "${B}git${GIT_OPTS}reset[[:space:]].*--hard|git reset --hard 破坏性重置"
-    "${B}git${GIT_OPTS}clean[[:space:]].*-[a-zA-Z]*f|git clean -f 强制清除未跟踪文件"
     # Git 分支、Tag、Stash 强制重置
     "${B}git${GIT_OPTS}(branch([[:space:]]+.*)?[[:space:]](-[a-zA-Z]*[Df]|--force)([[:space:]]|$)|checkout[[:space:]]+.*-B[[:space:]]+|switch[[:space:]]+.*-C[[:space:]]+|tag[[:space:]]+.*(-[a-zA-Z]*f|--force)|stash[[:space:]]+(drop|clear))|强制重置/删除分支、强制覆盖 Tag 或丢弃 Stash"
     "${B}git${GIT_OPTS}remote[[:space:]]+(remove|rm)([[:space:]]|$)|删除 git 远程仓库配置"
