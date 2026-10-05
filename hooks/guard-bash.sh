@@ -155,7 +155,7 @@ is_sensitive_read() {
   [[ "$cmd" =~ \.env\.(example|sample|template|dist) ]] && return 1
 
   # 快速预筛：若完全不含任何敏感关键词，0ms 瞬间返回
-  local kw_pat="(\.env|\.npmrc|\.netrc|\.git-credentials|\.config/(gh|gcloud|op)|\.docker/config\.json|\.cargo/credentials|\.ssh|\.aws|\.kube|\.gnupg|gradle\.properties|keystore|local\.properties|\.claude\.json|\.pypirc|\.m2/settings|\.pem|\.p12|\.jks|\.key)"
+  local kw_pat="(\.env|\.npmrc|\.netrc|\.git-credentials|\.config/(gh|gcloud|op)|\.docker/config\.json|\.cargo/credentials|\.ssh|\.aws|\.kube|\.gnupg|gradle\.properties|keystore|local\.properties|\.pypirc|\.m2/settings|\.pem|\.p12|\.jks|\.key)"
   [[ "$cmd" =~ $kw_pat || "${cmd//[\"\']/}" =~ $kw_pat ]] || return 1
 
   local file_readers="(cat|head|tail|less|more|bat|cp|mv|base64|xxd|hexdump|od|tar|zip|gzip|7z|bzip2)"
@@ -163,7 +163,7 @@ is_sensitive_read() {
   local all_readers="(cat|head|tail|grep|awk|less|more|bat|strings|rg|sed|jq|cp|mv|source|\.|base64|xxd|hexdump|od|openssl|tar|zip|gzip|7z|bzip2)"
 
   local env_cmd_pattern="${B}${WRAP}${all_readers}[[:space:]]+([^[:space:]]+[[:space:]]+)*([^[:space:]]*/)?\.env(\.[a-zA-Z0-9_-]+)?([[:space:]\"'\''|;&]|$)"
-  local global_configs="(\.npmrc|\.netrc|\.git-credentials|\.config/(gh|gcloud|op)(/.*)?|\.docker/config\.json|\.cargo/credentials.*|\.ssh(/.*)?|\.aws(/.*)?|\.kube(/.*)?|\.gnupg(/.*)?|(~|\$HOME|/Users/[^/[:space:]]+)/\.gradle/gradle\.properties|local\.properties|keystore\.properties|\.claude\.json|\.pypirc|\.m2/settings\.xml|\.(pem|p12|jks|keystore))([[:space:]\"'\''|;&]|$)"
+  local global_configs="(\.npmrc|\.netrc|\.git-credentials|\.config/(gh|gcloud|op)(/.*)?|\.docker/config\.json|\.cargo/credentials.*|\.ssh(/.*)?|\.aws(/.*)?|\.kube(/.*)?|\.gnupg(/.*)?|(~|\$HOME|/Users/[^/[:space:]]+)/\.gradle/gradle\.properties|local\.properties|keystore\.properties|\.pypirc|\.m2/settings\.xml|\.(pem|p12|jks|keystore))([[:space:]\"'\''|;&]|$)"
   local specific_key_files="([a-zA-Z0-9_.-]*[._-])?(rsa|dsa|ed25519|ecdsa|private|priv|secret|server|client|ssl|tls|cert|auth|jwt)[a-zA-Z0-9_.-]*\.key"
 
   # 双重检查：原始命令与去引号命令（彻底免疫 .en""v、'id_'rsa 等字符串拼接逃逸）
@@ -243,14 +243,6 @@ audit_command() {
     if [[ ! "$no_str_cmd" =~ $cd_safe_pat ]]; then
       decide deny "严禁使用裸 cd 命令！请遵守工程契约，改用工具自带路径参数（如 git -C <path>、pnpm --filter <pkg>、cargo --manifest-path <path>）"
     fi
-  fi
-
-  # ---------------------------------------------------------
-  # 5. P0：防线自我保护 (Self-Defense) —— 精准目标匹配，放行纯读与管道查看
-  # ---------------------------------------------------------
-  local self_defense_pat="(>>?[[:space:]]*|${B}(tee|mv|cp|rm|ln|chmod|chown|unlink|truncate)[[:space:]].*|${B}(sed|perl)[[:space:]]+-[a-zA-Z]*i.*)[^[:space:]]*\.claude/(settings[^/]*\.json|hooks)"
-  if [[ "$cmd" =~ $self_defense_pat ]]; then
-    decide ask "危险操作需确认：正在尝试修改、覆盖或删除 Claude 核心配置/安全防线钩子"
   fi
 
   # ---------------------------------------------------------

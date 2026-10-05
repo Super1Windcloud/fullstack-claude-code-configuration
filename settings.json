@@ -14,10 +14,6 @@
   },
   "permissions": {
     "deny": [
-      "Edit(**/.claude/settings*.json)",
-      "Edit(~/.claude/hooks/**)",
-      "Read(~/.claude.json)",
-      "Edit(~/.claude.json)",
       "Read(~/.pypirc)",
       "Edit(~/.pypirc)",
       "Read(~/.m2/settings.xml)",

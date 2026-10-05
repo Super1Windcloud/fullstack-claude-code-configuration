@@ -15,9 +15,8 @@
   * **剥离前导包装器**：自动识别并剥离 `command`、`builtin`、`sudo`、`xargs`、`nohup`、`exec` 等前缀；
   * **递归解包穿透审查**：遇到 `bash -c "<cmd>"`、`sh -c "<cmd>"`、`zsh -c "<cmd>"` 或 `eval "<cmd>"` 时，自动提取内层真实命令字符串递归送入审计流程，彻底解决套壳绕过；
   * **复合命令智能拆分**：保留单双引号内部边界，按 `;`、`&&`、`||`、`|` 逐段解析，彻底解决多命令拼接（如 `git restore --staged a && git restore b`）的掩护逃逸漏洞。
-* **P0 级防线自我保护 (Self-Defense)**：
-  * `settings.json` 静态 `deny` 彻底封死 `Edit/Write(~/.claude/settings.json)` 与 `Edit/Write(~/.claude/hooks/**)`；
-  * `guard-bash.sh` 动态拦截通过 Bash 试图修改或删除 Claude 核心配置的写命令（`sed -i`、`>`、`>>`、`tee`、`mv`、`cp`、`rm`），**严防大模型自我拆解防线**。
+* **Claude 自身配置与生命周期敏捷维护**：
+  * 放行 `~/.claude.json`、`~/.claude/settings.json` 及 `hooks/` 的读写与维护，支持通过 Claude 直接查看账号状态、热更新规则与配置状态栏，消除阻碍。
 * **P0 级敏感凭据与私钥读写全闭环防御**：
   * 阻断 Bash 与文件工具调取敏感配置：`.env*`、`~/.npmrc`、`~/.netrc`、`~/.config/gh/`、`~/.docker/config.json`、`~/.cargo/credentials*`、`gradle.properties`（私有仓库账密/签名密码）、`*.pem`、`*.p12`、`*.jks`、`*.keystore`；
   * 拦截 `security find-(generic|internet)-password` 读取 macOS Keychain 钥匙串密码。
@@ -138,7 +137,7 @@
 | **0ms 极速** | `cargo build` / `cargo fmt` / `cargo check` | **放行** | ✅ **0 Fork 极速引擎**：耗时从 400ms 降至 20ms，Rust/Gradle 日常开发极速放行 |
 | **0ms 极速** | `just test` / `just check` / `just lint` | **放行** | ✅ **本地流程放行**：本地日常辅助开发任务瞬间放行，严格守住 release 发版 |
 | **参数拦截** | `git diff --output=/tmp/evil.sh` | **ask** | ✅ **写参数排除**：排除 `--output` 任意文件写入风险 |
-| **自保放行** | `cat ~/.claude/settings.json` | **放行** | ✅ **0 误报**：纯读取配置命令正常无感放行 |
+| **自配置放行** | `cat ~/.claude.json` / 编辑配置与 Hook | **放行** | ✅ **解除自我阉割**：放行 Claude 自身配置与 Hook 维护管理，敏捷热更新 |
 | **范例放行** | `cat .env.example` / `cat .env.sample` | **放行** | ✅ **细分凭据防御**：放行无害模板文件，精准阻断真实敏感环境 |
 | **参数剥离** | `git commit -m "fix: cd to dir and just release"` | **放行** | ✅ **纯字面量剥离**：Commit 消息含关键词 0 误报 |
 
