@@ -99,7 +99,8 @@
   },
   "worktree": {
     "symlinkDirectories": [
-      "node_modules"
+      "node_modules",
+      ".cache"
     ],
     "baseRef": "head"
   },
