@@ -176,6 +176,12 @@ def setup(repo, home, selected, run, deploy, env, pending, failures, dry=False, 
         additions = [str(Path(sdk) / 'platform-tools')] + ([str(directories[0])] if directories else [])
         mcp_env['PATH'] = os.pathsep.join(additions + [own_env['PATH']])
     servers = {'mobile-mcp': {'command': str(npm_bin / 'mcp-server-mobile'), 'args': [], 'env': mcp_env}}
+    npx_bin = '/opt/homebrew/bin/npx' if os.path.exists('/opt/homebrew/bin/npx') else (shutil.which('npx') or 'npx')
+    servers['reqable'] = {
+        'command': npx_bin,
+        'args': ['-y', 'reqable-mcp-server'],
+        'env': {'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}
+    }
     if mode == 'full':
         # Use the installed Playwright browser revision instead of the MCP package's different revision.
         wrapper = runtime / 'playwright-mcp.sh'
@@ -215,6 +221,12 @@ def setup(repo, home, selected, run, deploy, env, pending, failures, dry=False, 
                                                 'environment': entry['env'], 'enabled': True}
         value.setdefault('mcp', {})['figma'] = {'type': 'remote', 'url': 'https://mcp.figma.com/mcp', 'enabled': True}
         write(path, value)
+    if 'grok' in selected:
+        path = home / '.grok/config.toml'
+        text = path.read_text() if path.exists() else ''
+        for name, entry in servers.items():
+            text = toml_server(text, name, entry)
+        write(path, text)
 
     guides = {'codex': '.codex/AGENTS.md', 'claude': '.claude/CLAUDE.md',
               'antigravity': '.gemini/config/GEMINI.md', 'opencode': '.config/opencode/AGENTS.md'}
