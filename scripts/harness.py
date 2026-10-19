@@ -16,6 +16,7 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 LOCATIONS = {'codex': '.codex', 'claude': '.claude', 'opencode': '.config/opencode', 'shared': '.agents'}
 LOCATIONS.update({'antigravity': '.gemini/antigravity-cli', 'antigravity-global': '.gemini/config'})
+LOCATIONS.update({'grok': '.grok'})
 FILES = {
     'codex': ['AGENTS.md', 'config.toml', 'rules', 'agents'],
     'claude': ['CLAUDE.md', 'settings.json', 'statusline-command.sh', 'hooks', 'agents', 'commands'],
@@ -24,6 +25,7 @@ FILES = {
     'shared': ['AGENTS.md'],
     'antigravity': ['AGENTS.md', 'settings.json', 'statusline.sh'],
     'antigravity-global': ['GEMINI.md', 'AGENTS.md', 'agents', 'rules', 'workflows'],
+    'grok': ['config.toml', 'statusline.sh'],
 }
 TESTKIT_SOURCE = {'url': 'https://github.com/winhok/testkit.git',
                   'ref': '0c80ac38944bb70c6a60305c174dbc2a6a9767f2', 'subdir': 'skills'}
@@ -113,7 +115,15 @@ def export_file(source, dest, home, ancestors=()):
             text = data.decode()
             clean(text, home)  # Validate text assets without rewriting examples or instructions.
             if source.suffix in ('.sh', '.rules'):
-                data = text.replace(str(home) + '/', '~/').encode()
+                lines = text.splitlines(keepends=True)
+                if lines and lines[0].startswith('#!'):
+                    shebang = lines[0]
+                    if shebang.startswith(('#!' + str(home), '#!~')):
+                        shebang = '#!/opt/homebrew/bin/python3\n' if os.path.exists('/opt/homebrew/bin/python3') else '#!/usr/bin/env python3\n'
+                    rest = ''.join(lines[1:]).replace(str(home) + '/', '~/')
+                    data = (shebang + rest).encode()
+                else:
+                    data = text.replace(str(home) + '/', '~/').encode()
         except UnicodeDecodeError:
             pass
         except ValueError as error:
@@ -178,6 +188,7 @@ def sync(repo, home, selected=None):
                        {'id': 'figma@claude-plugins-official', 'source': 'anthropics/claude-plugins-official'}],
             'antigravity': [{'id': 'testkit', 'source': TESTKIT_SOURCE['url']},
                             {'id': 'Figma', 'source': 'https://github.com/figma/mcp-server-guide'}],
+            'grok': [{'id': 'testkit', 'source': 'winhok/testkit'}],
         }
         for harness in selected:
             for plugin in defaults.get(harness, []):
@@ -324,6 +335,25 @@ def install(repo, home, selected, dry=False, offline=False, dependencies='full')
             text = target.read_text().splitlines(keepends=True)
             text[0] = '#!' + sys.executable + '\n'
             target.write_text(''.join(text))
+
+    if 'grok' in selected:
+        for plugin in manifest.get('grok', []):
+            if not is_supported_plugin(plugin):
+                continue
+            if offline or not plugin.get('source') or (not shutil.which('grok') and not dry):
+                pending.append(f"{plugin['id']}：离线模式、无来源或未找到 grok")
+                continue
+            try:
+                run(['grok', 'plugin', 'install', plugin['source'], '--trust'])
+            except subprocess.SubprocessError:
+                failures.append(plugin['id'])
+        target = home / LOCATIONS['grok'] / 'statusline.sh'
+        if target.exists() and not dry:
+            text = target.read_text().splitlines(keepends=True)
+            py = '/opt/homebrew/bin/python3' if os.path.exists('/opt/homebrew/bin/python3') else sys.executable
+            text[0] = '#!' + py + '\n'
+            target.write_text(''.join(text))
+            target.chmod(0o755)
 
     source = manifest.get('testkit_skill_source')
     targets = [name for name in ('codex', 'opencode') if name in selected]

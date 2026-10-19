@@ -128,6 +128,12 @@ class HarnessTest(unittest.TestCase):
             self.quiet(harness.install, self.repo, self.home, ['antigravity'])
         self.assertEqual(run.call_args.args[0], ['agy', 'plugin', 'install', 'https://example.invalid/testkit.git'])
 
+    def test_grok_uses_actual_plugin_installer(self):
+        self.write('plugins.json', json.dumps({'grok': [{'id': 'testkit', 'source': 'winhok/testkit'}]}), self.repo)
+        with patch.object(harness.shutil, 'which', return_value='/fake/grok'), patch.object(harness.subprocess, 'run') as run:
+            self.quiet(harness.install, self.repo, self.home, ['grok'])
+        self.assertEqual(run.call_args.args[0], ['grok', 'plugin', 'install', 'winhok/testkit', '--trust'])
+
     def test_legacy_opencode_link_is_backed_up_before_migration(self):
         legacy = self.home / '.config/opencode/skills/testkit'
         legacy.parent.mkdir(parents=True)
