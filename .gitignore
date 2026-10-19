@@ -20,3 +20,8 @@ session-env/
 .env
 .env.*
 !.env.example
+
+# Plugin runtime state (re-downloaded from declared marketplaces)
+plugins/marketplaces/
+plugins/cache/
+plugins/plugin-catalog-cache.json

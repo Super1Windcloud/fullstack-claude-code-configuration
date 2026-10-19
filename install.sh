@@ -10,12 +10,12 @@ echo "Target: ${TARGET_DIR}"
 mkdir -p "${TARGET_DIR}"
 
 # 1. Install statusline
-echo "[1/4] Installing statusline-command.sh..."
+echo "[1/5] Installing statusline-command.sh..."
 cp "${SCRIPT_DIR}/statusline-command.sh" "${TARGET_DIR}/statusline-command.sh"
 chmod +x "${TARGET_DIR}/statusline-command.sh"
 
 # 2. Install settings.json (backup existing and expand ~/ to actual $HOME)
-echo "[2/4] Installing settings.json..."
+echo "[2/5] Installing settings.json..."
 if [ -f "${TARGET_DIR}/settings.json" ]; then
   bak="${TARGET_DIR}/settings.json.bak.$(date +'%Y%m%d%H%M%S')"
   cp "${TARGET_DIR}/settings.json" "$bak"
@@ -24,15 +24,25 @@ fi
 sed "s|~/|${HOME}/|g" "${SCRIPT_DIR}/settings.json" > "${TARGET_DIR}/settings.json"
 
 # 3. Install hooks (PreToolUse safety guard & MCP guard)
-echo "[3/4] Installing hooks..."
+echo "[3/5] Installing hooks..."
 mkdir -p "${TARGET_DIR}/hooks"
 mkdir -p -m 0700 "${TARGET_DIR}/logs"
 cp -r "${SCRIPT_DIR}/hooks/"* "${TARGET_DIR}/hooks/"
 chmod +x "${TARGET_DIR}/hooks/"*.sh
 
 # 4. Install CLAUDE.md (Global engineering defense & delivery contract)
-echo "[4/4] Installing CLAUDE.md..."
+echo "[4/5] Installing CLAUDE.md..."
 cp "${SCRIPT_DIR}/CLAUDE.md" "${TARGET_DIR}/CLAUDE.md"
+
+# 5. Install plugin metadata (marketplaces & installed plugin versions)
+echo "[5/5] Installing plugin metadata..."
+mkdir -p "${TARGET_DIR}/plugins"
+if [ -f "${SCRIPT_DIR}/plugins/known_marketplaces.json" ]; then
+  sed "s|~/|${HOME}/|g" "${SCRIPT_DIR}/plugins/known_marketplaces.json" > "${TARGET_DIR}/plugins/known_marketplaces.json"
+fi
+if [ -f "${SCRIPT_DIR}/plugins/installed_plugins.json" ]; then
+  sed "s|~/|${HOME}/|g" "${SCRIPT_DIR}/plugins/installed_plugins.json" > "${TARGET_DIR}/plugins/installed_plugins.json"
+fi
 
 echo "=== Installation Completed Successfully! ==="
 echo "Claude Code is now equipped with:"

@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "plugins": {
+    "figma@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "~/.claude/plugins/cache/claude-plugins-official/figma/2.2.68",
+        "version": "2.2.68",
+        "installedAt": "2026-07-17T03:50:56.211Z",
+        "lastUpdated": "2026-07-17T03:50:56.211Z",
+        "gitCommitSha": "bea8bea5f676ab2bf76fa822b82f50b66653c098"
+      }
+    ],
+    "frontend-design@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "~/.claude/plugins/cache/claude-plugins-official/frontend-design/f7b31235e6f0",
+        "version": "f7b31235e6f0",
+        "installedAt": "2026-10-02T13:56:03.415Z",
+        "lastUpdated": "2026-10-02T13:56:03.415Z",
+        "gitCommitSha": "f7b31235e6f01cd7cd08ad4a6699f007a4072519"
+      }
+    ],
+    "claude-code-setup@claude-plugins-official": [
+      {
+        "scope": "user",
+        "installPath": "~/.claude/plugins/cache/claude-plugins-official/claude-code-setup/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-10-02T13:57:05.601Z",
+        "lastUpdated": "2026-10-02T13:57:05.601Z",
+        "gitCommitSha": "f7b31235e6f01cd7cd08ad4a6699f007a4072519"
+      }
+    ],
+    "testkit@testkit": [
+      {
+        "scope": "user",
+        "installPath": "~/.claude/plugins/cache/testkit/testkit/2.4.0",
+        "version": "2.4.0",
+        "installedAt": "2026-10-19T06:58:08.000Z",
+        "lastUpdated": "2026-10-19T06:58:08.000Z",
+        "gitCommitSha": "0c80ac38944bb70c6a60305c174dbc2a6a9767f2"
+      }
+    ]
+  }
+}
