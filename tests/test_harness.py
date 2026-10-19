@@ -144,15 +144,15 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(json.loads((self.repo / 'plugins.json').read_text())['testkit_skill_source'], sources[0])
 
 
-    def test_plugin_catalog_contains_only_testkit(self):
+    def test_plugin_catalog_contains_only_testkit_and_figma(self):
         self.write('.claude/plugins/installed_plugins.json', json.dumps({'plugins': {
             'testkit@testkit': [{'scope': 'user'}],
             'frontend-design@official': [{'scope': 'user'}]}}))
         self.quiet(harness.sync, self.repo, self.home, ['claude', 'antigravity', 'codex'])
         manifest = json.loads((self.repo / 'plugins.json').read_text())
         for name in ('claude', 'antigravity', 'codex'):
-            self.assertTrue(manifest[name])
-            self.assertTrue(all(harness.is_testkit(plugin) for plugin in manifest[name]))
+            self.assertEqual({p['id'].split('@')[0].lower() for p in manifest[name]}, {'testkit', 'figma'})
+            self.assertTrue(all(harness.is_supported_plugin(plugin) for plugin in manifest[name]))
 
     def test_legacy_unrelated_plugin_is_not_installed(self):
         self.write('plugins.json', json.dumps({'claude': [
@@ -171,6 +171,15 @@ class HarnessTest(unittest.TestCase):
         for name in ('.codex', '.config/opencode'):
             self.assertEqual((self.home / name / 'skills/testspec-plan/SKILL.md').read_text(), 'Testkit')
         self.assertEqual(run.call_args.args[0], ['git', '-C', str(checkout), 'checkout', '--detach', source['ref']])
+
+
+
+    def test_remote_codex_figma_does_not_register_a_fake_git_marketplace(self):
+        self.write('plugins.json', json.dumps({'codex': [
+            {'id': 'figma@openai-curated', 'source': None, 'remote': True}]}), self.repo)
+        with patch.object(harness.shutil, 'which', return_value='/fake/codex'), patch.object(harness.subprocess, 'run') as run:
+            self.quiet(harness.install, self.repo, self.home, ['codex'])
+        self.assertEqual(run.call_args.args[0], ['codex', 'plugin', 'add', 'figma@openai-curated'])
 
 
 if __name__ == '__main__':

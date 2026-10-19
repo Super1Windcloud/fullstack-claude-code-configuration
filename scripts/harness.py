@@ -2,6 +2,7 @@
 """Portable configuration export and installation (Python 3.11+)."""
 import argparse
 import datetime
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -30,6 +31,10 @@ TESTKIT_SOURCE = {'url': 'https://github.com/winhok/testkit.git',
 
 def is_testkit(plugin):
     return plugin['id'].split('@', 1)[0].lower() == 'testkit'
+
+
+def is_supported_plugin(plugin):
+    return plugin['id'].split('@', 1)[0].lower() in ('testkit', 'figma')
 
 
 IGNORE = {'.git', '.DS_Store', '__pycache__', 'node_modules', '.venv', '.cache'}
@@ -133,15 +138,16 @@ def catalog(home):
     for selector, state in sorted(plugins.items()):
         source = markets.get(selector.rsplit('@', 1)[-1], {})
         codex.append({'id': selector, 'enabled': state.get('enabled'),
-                      'source': source.get('source') if source.get('source_type') == 'git' else None})
+                      'source': source.get('source') if source.get('source_type') == 'git' else None,
+                      'remote': selector == 'figma@openai-curated'})
     markets = read_json(home / '.claude/plugins/known_marketplaces.json')
     claude = []
     for selector, installs in read_json(home / '.claude/plugins/installed_plugins.json').get('plugins', {}).items():
         if any(i.get('scope') == 'user' for i in installs):
             source = markets.get(selector.rsplit('@', 1)[-1], {}).get('source', {})
             claude.append({'id': selector, 'source': source.get('repo') or source.get('url')})
-    return clean({'version': 1, 'codex': [p for p in codex if is_testkit(p)],
-                  'claude': [p for p in claude if is_testkit(p)]}, home)
+    return clean({'version': 1, 'codex': [p for p in codex if is_supported_plugin(p) and p['id'] != 'figma@openai-api-curated'],
+                  'claude': [p for p in claude if is_supported_plugin(p)]}, home)
 
 
 def sync(repo, home, selected=None):
@@ -166,20 +172,25 @@ def sync(repo, home, selected=None):
             for path in (home / '.codex').glob('*.config.toml'):
                 export_file(path, staging / 'profiles' / path.name, home)
         defaults = {
-            'codex': [{'id': 'testkit@testkit-marketplace', 'source': TESTKIT_SOURCE['url'], 'enabled': True}],
-            'claude': [{'id': 'testkit@testkit', 'source': 'winhok/testkit'}],
-            'antigravity': [{'id': 'testkit', 'source': TESTKIT_SOURCE['url']}],
+            'codex': [{'id': 'testkit@testkit-marketplace', 'source': TESTKIT_SOURCE['url'], 'enabled': True},
+                      {'id': 'figma@openai-curated', 'source': None, 'remote': True}],
+            'claude': [{'id': 'testkit@testkit', 'source': 'winhok/testkit'},
+                       {'id': 'figma@claude-plugins-official', 'source': 'anthropics/claude-plugins-official'}],
+            'antigravity': [{'id': 'testkit', 'source': TESTKIT_SOURCE['url']},
+                            {'id': 'Figma', 'source': 'https://github.com/figma/mcp-server-guide'}],
         }
         for harness in selected:
-            if harness in defaults and not manifest.get(harness):
-                manifest[harness] = defaults[harness]
+            for plugin in defaults.get(harness, []):
+                entries = manifest.setdefault(harness, [])
+                if not any(p['id'] == plugin['id'] for p in entries):
+                    entries.append(plugin)
         (staging / 'plugins.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
         for source in sorted(staging.rglob('*')):
             if source.is_file():
                 dest = repo / source.relative_to(staging)
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, dest)
-    print('已同步：' + ', '.join(selected) + '，技能安装仅保留 Testkit。')
+    print('已同步：' + ', '.join(selected) + '，同步 Testkit 与 Figma 安装来源。')
 
 
 def merge_dict(old, new):
@@ -189,7 +200,7 @@ def merge_dict(old, new):
     return result
 
 
-def install(repo, home, selected, dry=False, offline=False):
+def install(repo, home, selected, dry=False, offline=False, dependencies='full'):
     backup = home / '.harness-backups' / datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     pending, registered, saved_configs = [], set(), {}
     failures = []
@@ -200,9 +211,9 @@ def install(repo, home, selected, dry=False, offline=False):
     def run(command):
         print('执行：' + ' '.join(map(str, command)), flush=True)
         if not dry:
-            subprocess.run(command, env=env, check=True, timeout=300)
+            subprocess.run(command, env=env, check=True, timeout=1200, stdin=subprocess.DEVNULL)
 
-    def deploy(source, dest):
+    def deploy(source, dest, preserve_host=True):
         nonlocal count
         if source.name == 'testkit' and source.is_symlink() and not source.exists() and 'opencode' in selected:
             return  # Migrated from the legacy link to directly discoverable skill directories.
@@ -232,9 +243,9 @@ def install(repo, home, selected, dry=False, offline=False):
             data = data.decode().replace('~/', str(home) + '/').encode()
         except UnicodeDecodeError:
             pass
-        if source.name in ('settings.json', 'opencode.json', 'cli.json'):
+        if source.name in ('settings.json', 'opencode.json', 'cli.json') and preserve_host:
             data = (json.dumps(merge_dict(read_json(dest), json.loads(data)), ensure_ascii=False, indent=2) + '\n').encode()
-        elif source.name == 'config.toml' and dest.exists():
+        elif source.name == 'config.toml' and dest.exists() and preserve_host:
             # Preserve host-specific project trust and runtime marketplace tables.
             extra, keep = [], False
             for line in dest.read_text().splitlines():
@@ -272,9 +283,9 @@ def install(repo, home, selected, dry=False, offline=False):
         if harness not in selected:
             continue
         for plugin in manifest.get(harness, []):
-            if not is_testkit(plugin):
+            if not is_supported_plugin(plugin):
                 continue
-            if not plugin['source']:
+            if not plugin['source'] and not plugin.get('remote'):
                 pending.append(f"{plugin['id']}：由客户端或账号管理，无可移植安装源")
                 continue
             if offline or (not shutil.which(harness) and not dry):
@@ -287,7 +298,7 @@ def install(repo, home, selected, dry=False, offline=False):
                      else read_json(home / '.claude/plugins/known_marketplaces.json'))
             try:
                 # A config table alone is not an installed Codex marketplace snapshot.
-                if (harness, source) not in registered and (harness == 'codex' or market not in known):
+                if not plugin.get('remote') and (harness, source) not in registered and (harness == 'codex' or market not in known):
                     run([harness, 'plugin', 'marketplace', 'add', source])
                     registered.add((harness, source))
                 run([harness, 'plugin', 'add' if harness == 'codex' else 'install', plugin['id']])
@@ -299,7 +310,7 @@ def install(repo, home, selected, dry=False, offline=False):
 
     if 'antigravity' in selected:
         for plugin in manifest.get('antigravity', []):
-            if not is_testkit(plugin):
+            if not is_supported_plugin(plugin):
                 continue
             if offline or not plugin['source'] or (not shutil.which('agy') and not dry):
                 pending.append(f"{plugin['id']}：离线模式、无来源或未找到 agy")
@@ -338,11 +349,17 @@ def install(repo, home, selected, dry=False, offline=False):
                 locked = (config_dir(repo, 'opencode') / 'package-lock.json').exists()
                 run(['npm', '--prefix', str(target), 'ci' if locked else 'install', '--no-audit', '--no-fund'])
         print('OpenCode 配置中的 npm 插件由 OpenCode 下次启动时自动安装。')
+    if (repo / 'runtime-dependencies.json').exists() and dependencies != 'none':
+        spec = importlib.util.spec_from_file_location('harness_runtime_setup', repo / 'scripts/runtime_setup.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.setup(repo, home, selected, run, lambda source, dest: deploy(source, dest, False),
+                     env, pending, failures, dry=dry, offline=offline, mode=dependencies)
     print(f"{'预览' if dry else '已部署'} {count} 个文件；备份目录：{backup}")
     if pending:
         print('以下项目未由本次脚本安装：\n' + '\n'.join('  - ' + item for item in pending))
     if failures:
-        raise ValueError('插件安装失败：' + ', '.join(failures))
+        raise ValueError('安装失败：' + ', '.join(failures))
 
 
 def main():
@@ -352,6 +369,7 @@ def main():
     parser.add_argument('--repo', type=Path, default=ROOT)
     parser.add_argument('--only', nargs='+', choices=list(LOCATIONS))
     parser.add_argument('--dry-run', action='store_true')
+    parser.add_argument('--dependencies', choices=['full', 'core', 'none'], default='full', help='默认准备全部 Testkit 工具；core 仅 Python 核心依赖和 mobile-mcp；none 跳过环境准备')
     parser.add_argument('--offline', action='store_true', help='只部署仓库文件，不拉取插件和依赖')
     args = parser.parse_args()
     args.only = args.only or read_json(args.repo / '.harness.json').get('selected', list(LOCATIONS))
@@ -360,7 +378,7 @@ def main():
             parser.error('sync 不支持 --dry-run；导出只修改配置仓库')
         sync(args.repo.resolve(), args.home.resolve(), args.only)
     else:
-        install(args.repo.resolve(), args.home.resolve(), args.only, args.dry_run, args.offline)
+        install(args.repo.resolve(), args.home.resolve(), args.only, args.dry_run, args.offline, args.dependencies)
 
 
 if __name__ == '__main__':

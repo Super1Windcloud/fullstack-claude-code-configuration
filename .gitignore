@@ -38,3 +38,9 @@ vendor/
 
 # Skills are restored from Testkit upstream; never vendor local skill packages.
 skills/
+
+node_modules/
+
+.cache/
+
+.venv/

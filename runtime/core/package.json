@@ -1,0 +1,6 @@
+{
+  "name": "harness-testkit-runtime-core",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {"@mobilenext/mobile-mcp": "1.0.12"}
+}

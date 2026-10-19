@@ -1,26 +1,25 @@
 # Fullstack Claude Code Configuration 🚀
 
-## 配置同步与 Testkit 安装
+## Testkit 完整依赖与 Figma 安装
 
-本仓库独立使用；技能范围仅为 [Testkit](https://github.com/winhok/testkit)。需要 Python 3.11+、Git 和 Claude Code CLI；OpenCode 依赖安装另需 npm。
+本仓库可独立部署 Claude Code。默认一并安装 Testkit 完整 skills、Python/移动端/浏览器/性能/视频/逆向工具依赖，并同步 Figma 插件安装来源。需要 Python 3.11+、Git；macOS 系统包通过已有 Homebrew 补齐。full 需要 Node 24+、npm 10+，缺少时尝试由 Homebrew 准备。
 
 ```bash
-/path/to/fullstack-claude-code-configuration/sync.sh
-/path/to/fullstack-claude-code-configuration/install.sh --dry-run
-/path/to/fullstack-claude-code-configuration/install.sh
-/path/to/fullstack-claude-code-configuration/install.sh --offline
+~/super/fullstack-claude-code-configuration/sync.sh
+~/super/fullstack-claude-code-configuration/install.sh --dry-run
+~/super/fullstack-claude-code-configuration/install.sh
+~/super/fullstack-claude-code-configuration/install.sh --dependencies core
+~/super/fullstack-claude-code-configuration/install.sh --offline
 ```
 
-- `sync.sh` 同步原有全局指令、配置、状态栏和 hooks，跳过本机所有 skills 目录。
-- `plugins.json` 仅保留 Testkit 插件及来源。Claude Code 的安装入口仅恢复 Testkit skills，不安装其他技能插件。
-- GitHub 不保存本机 skills 副本、系统 skills、其他 skills 的脚本或素材；`.gitignore` 阻止这些目录再次入库。本机已有的其他 skills 不会被卸载。
-- Claude Code 使用 `claude plugin install testkit@testkit`；Antigravity 使用 `agy plugin install https://github.com/winhok/testkit.git`；OpenCode 从清单固定的 Git commit 拉取 Testkit，部署到原生 `skills/<name>/SKILL.md`。
-- 旧版 `plugins/` 下的登记文件只作历史参考，不参与自动安装；安装来源以根目录 `plugins.json` 为准。旧清单中的其他插件也会被安装脚本忽略。
-- 覆盖前备份到 `~/.harness-backups/<时间>/`，JSON 配置合并保留本机凭据；`--home /path/to/home` 指定导出或安装目录。
-- 常见凭据字段会过滤，登录状态、会话、运行时缓存不入库；提交前仍需审查自定义配置。
-- `--dry-run` 不修改本机、不联网安装；`--offline` 仅部署配置，报告尚未恢复的 Testkit 和依赖。缺少 CLI 会报告跳过项，安装失败返回非零状态。
+- 普通安装默认 `--dependencies full`；core 仅准备核心 Python 和 mobile-mcp；none 跳过运行环境/MCP 构建。
+- 默认安装并登记 mobile-mcp，full 另含 Playwright MCP；使用 SDK 和独立运行目录的实际路径，不只复制 JSON。
+- 插件安装允许列表为 Testkit、Figma；其他本机 skills 不同步到 GitHub，也不卸载。插件缓存、依赖缓存和登录凭据不入库。
+- 运行环境位于 `~/.local/share/harness-testkit/`；全局指令会补充 `source .../env.sh` 的使用约定。
+- 覆盖前备份；保留原有设置、凭据与其他 MCP。`--dry-run` 无写入和下载；`--offline` 不联网安装，只部署配置并报告待安装项。
+- Xcode、设备信任、SDK 许可、WDA 签名、Midscene 模型凭据和 Figma OAuth 仍需本机准备，安装失败会返回非零状态。
 
-验证：`python3 -B -m unittest discover -s /path/to/fullstack-claude-code-configuration/tests -v`。
+详见 [完整依赖与 MCP 配置](runtime/README.md)、[实际验证范围](VALIDATION.md)。验证命令：`python3 -B -m unittest discover -s ~/super/fullstack-claude-code-configuration/tests -v`。
 
 ## ✨ 核心特性
 

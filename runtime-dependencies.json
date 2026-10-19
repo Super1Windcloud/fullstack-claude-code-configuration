@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "default": "full",
+  "native": [
+    {
+      "command": "adb",
+      "package": "android-platform-tools",
+      "cask": true,
+      "profiles": [
+        "core",
+        "full"
+      ]
+    },
+    {
+      "command": "ffmpeg",
+      "package": "ffmpeg",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "jmeter",
+      "package": "jmeter",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "k6",
+      "package": "k6",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "jadx",
+      "package": "jadx",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "apktool",
+      "package": "apktool",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "d2j-dex2jar",
+      "package": "dex2jar",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "vineflower",
+      "package": "vineflower",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "llvm-readelf",
+      "package": "llvm",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "yara",
+      "package": "yara",
+      "profiles": [
+        "full"
+      ]
+    },
+    {
+      "command": "sdkmanager",
+      "package": "android-commandlinetools",
+      "cask": true,
+      "profiles": [
+        "full"
+      ]
+    }
+  ],
+  "manual": [
+    "iOS: Xcode、开发者模式、设备信任、Apple 签名与 WebDriverAgent provisioning",
+    "Android SDK 许可、USB 调试授权，以及按目标 ABI 选择的 NDK 需按本机状态完成",
+    "Midscene 模型凭据与 Figma OAuth 登录由本机账号提供"
+  ],
+  "android_build_tools": "36.0.0"
+}
