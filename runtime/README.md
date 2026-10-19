@@ -4,7 +4,7 @@
 
 | 范围 | 自动准备 |
 | --- | --- |
-| 核心 | Testkit 的 openpyxl、PyYAML、Schemathesis、pytest；mobile-mcp；缺少时安装 Node/npm、ADB |
+| 核心 | Testkit 的 openpyxl、PyYAML、Schemathesis、pytest；mobile-mcp、scrcpy-mcp 0.5.0；缺少时安装 Node 24+/npm、ADB、scrcpy |
 | 浏览器 | agent-browser、Midscene CLI、Playwright MCP、Playwright Chromium |
 | iOS / Android 自动化 | Appium，独立 APPIUM_HOME 下的 XCUITest / UiAutomator2 驱动 |
 | 性能 | Locust、JMeter、k6 |
@@ -40,7 +40,7 @@ source ~/.local/share/harness-testkit/claude/env.sh
 - Antigravity：合并写入 `~/.gemini/config/mcp_config.json`。
 - OpenCode：合并写入 `~/.config/opencode/opencode.json` 的本地 MCP，并登记 Figma 官方远程 MCP。
 
-core 只登记 mobile-mcp，full 另外登记 Playwright MCP。MCP 使用运行目录下的实际可执行路径，并携带 SDK、PATH 和浏览器环境。离线登记不代表对应服务已安装或可连接。
+core 登记 mobile-mcp、Reqable、scrcpy，full 另外登记 Playwright MCP。scrcpy-mcp 固定为 0.5.0，由运行目录的 npm 锁文件还原，不依赖全局安装；不导出本机完整 MCP 状态或凭据。MCP 使用运行目录下的实际可执行路径，并携带 SDK、PATH 和浏览器环境。离线登记不代表对应服务已安装或可连接。
 
 ## Figma
 
@@ -49,3 +49,5 @@ core 只登记 mobile-mcp，full 另外登记 Playwright MCP。MCP 使用运行�
 Xcode 安装、开发者模式、设备信任、WDA 签名、业务环境及 Midscene 模型凭据仍需按目标准备。安装不会创建手机会话、部署 App、启动性能负载或调用付费模型。
 
 来源：[Testkit 安装说明](https://github.com/winhok/testkit/blob/0c80ac38944bb70c6a60305c174dbc2a6a9767f2/docs/installation.md)、[Mobile MCP](https://github.com/mobile-next/mobile-mcp)、[Appium 驱动安装](https://appium.io/docs/en/latest/reference/cli/extensions/)、[Figma MCP](https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/)。
+
+Scrcpy MCP 来源：[JuanCF/scrcpy-mcp](https://github.com/JuanCF/scrcpy-mcp)。

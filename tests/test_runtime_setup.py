@@ -65,6 +65,28 @@ class RuntimeTest(unittest.TestCase):
         self.assertEqual(opencode['mobile-mcp']['type'], 'local')
         self.assertTrue(any('离线' in item for item in self.pending))
 
+    def test_scrcpy_is_restored_for_each_owned_client_and_preserves_other_servers(self):
+        for selected, relative in [(['claude'], '.claude.json'),
+                                   (['antigravity', 'antigravity-global'], '.gemini/config/mcp_config.json')]:
+            with self.subTest(client=selected[0]):
+                path = self.home / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({'private': 'keep', 'mcpServers': {
+                    'custom': {'url': 'https://example.invalid'},
+                    'scrcpy': {'command': '/old/scrcpy-mcp'}}}))
+                self.call(selected, offline=True, mode='core')
+                config = json.loads(path.read_text())
+                entry = config['mcpServers']['scrcpy']
+                self.assertTrue(entry['command'].endswith('/' + selected[0] + '/node/node_modules/.bin/scrcpy-mcp'))
+                self.assertEqual(entry['args'], [])
+                self.assertIn('ANDROID_HOME', entry['env'])
+                self.assertEqual(config['private'], 'keep')
+                self.assertIn('custom', config['mcpServers'])
+                self.assertEqual(self.commands, [])
+                if selected[0] == 'claude':
+                    alternate = json.loads((self.home / '.claude/.claude.json').read_text())
+                    self.assertEqual(alternate['mcpServers']['scrcpy'], entry)
+
     def test_dry_run_does_not_create_files(self):
         before = list(self.home.rglob('*'))
         with patch.object(runtime.shutil, 'which', return_value=None), patch.object(runtime.platform, 'system', return_value='Darwin'):

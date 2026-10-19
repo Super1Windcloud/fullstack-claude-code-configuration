@@ -98,7 +98,7 @@ def setup(repo, home, selected, run, deploy, env, pending, failures, dry=False, 
 
     if not offline:
         node = which('node')
-        minimum = 24 if mode == 'full' else 20
+        minimum = 24
         if node and not dry:
             version = subprocess.check_output([node, '--version'], text=True, timeout=15)
             if int(version.lstrip('v').split('.')[0]) < minimum:
@@ -182,6 +182,7 @@ def setup(repo, home, selected, run, deploy, env, pending, failures, dry=False, 
         'args': ['-y', 'reqable-mcp-server'],
         'env': {'PATH': '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'}
     }
+    servers['scrcpy'] = {'command': str(npm_bin / 'scrcpy-mcp'), 'args': [], 'env': mcp_env}
     if mode == 'full':
         # Use the installed Playwright browser revision instead of the MCP package's different revision.
         wrapper = runtime / 'playwright-mcp.sh'

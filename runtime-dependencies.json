@@ -81,6 +81,14 @@
       "profiles": [
         "full"
       ]
+    },
+    {
+      "command": "scrcpy",
+      "package": "scrcpy",
+      "profiles": [
+        "core",
+        "full"
+      ]
     }
   ],
   "manual": [

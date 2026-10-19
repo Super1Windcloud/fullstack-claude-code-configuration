@@ -4,7 +4,7 @@
 
 ## Testkit 完整依赖与 Figma 安装
 
-本仓库可独立部署 Claude Code。默认一并安装 Testkit 完整 skills、Python/移动端/浏览器/性能/视频/逆向工具依赖，并同步 Figma 插件安装来源。需要 Python 3.11+、Git；macOS 系统包通过已有 Homebrew 补齐。full 需要 Node 24+、npm 10+，缺少时尝试由 Homebrew 准备。
+本仓库可独立部署 Claude Code。默认一并安装 Testkit 完整 skills、Python/移动端/浏览器/性能/视频/逆向工具依赖，并同步 Figma 插件安装来源。需要 Python 3.11+、Git；macOS 系统包通过已有 Homebrew 补齐。core/full 均需要 Node 24+、npm 10+，缺少时尝试由 Homebrew 准备。
 
 ```bash
 ~/super/fullstack-claude-code-configuration/sync.sh

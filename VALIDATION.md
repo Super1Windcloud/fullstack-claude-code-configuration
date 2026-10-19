@@ -1,5 +1,13 @@
 # 安装验证记录
 
+## Scrcpy MCP 还原补缺验证（2026-10-19）
+
+- `python3 -B -m unittest discover -s tests -v`：30 项通过；覆盖 Scrcpy 登记、普通 HOME 与 CLAUDE_CONFIG_DIR 两种路径、其他 MCP/凭据保留和跨 agent 隔离。
+- core/full 均锁定 `scrcpy-mcp = 0.5.0`；既有依赖版本未改变，core 最低 Node 版本同步为 24。
+- 在本仓库 `runtime/core/` 执行 `npm ci --ignore-scripts --no-audit --no-fund` 成功，安装 155 个包。由该目录实际启动 Scrcpy MCP，JSON-RPC initialize 与 tools/list 成功，返回 39 个工具；其 serverInfo 自报版本为 0.0.0，npm 包版本核对为 0.5.0。
+- 未调用设备工具；未在本机 Claude 配置上执行完整安装；测试环境中的安装不代表真实设备能力验收。FFmpeg optional 安装脚本未执行。
+
+
 ## 单 agent 安装隔离验证（2026-10-19）
 
 - `python3 -B -m unittest discover -s /Users/super/super/fullstack-claude-code-configuration/tests`：29 项通过。

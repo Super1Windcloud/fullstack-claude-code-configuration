@@ -8,6 +8,7 @@
     "@midscene/cli": "1.16.0",
     "@playwright/mcp": "0.0.83",
     "@playwright/test": "1.64.1",
-    "appium": "3.8.0"
+    "appium": "3.8.0",
+    "scrcpy-mcp": "0.5.0"
   }
 }
