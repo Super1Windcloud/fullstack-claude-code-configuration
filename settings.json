@@ -13,7 +13,10 @@
     "PAGER": "cat",
     "GIT_TERMINAL_PROMPT": "0",
     "GIT_EDITOR": "true",
-    "HOMEBREW_NO_AUTO_UPDATE": "1"
+    "HOMEBREW_NO_AUTO_UPDATE": "1",
+    "ANTHROPIC_BASE_URL": "https://deepseek-api.org",
+    "ANTHROPIC_AUTH_TOKEN": "sk-YOUR_API_KEY_HERE",
+    "ANTHROPIC_MODEL": "deepseek-v4.1-flash-1017"
   },
   "permissions": {
     "deny": [
@@ -119,13 +122,20 @@
   "enabledPlugins": {
     "figma@claude-plugins-official": true,
     "frontend-design@claude-plugins-official": true,
-    "claude-code-setup@claude-plugins-official": true
+    "claude-code-setup@claude-plugins-official": true,
+    "testkit@testkit": true
   },
   "extraKnownMarketplaces": {
     "claude-plugins-official": {
       "source": {
         "source": "github",
         "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "testkit": {
+      "source": {
+        "source": "github",
+        "repo": "winhok/testkit"
       }
     }
   },
