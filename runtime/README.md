@@ -23,15 +23,17 @@
 /绝对路径/install.sh --offline             # 部署配置并登记 MCP，不拉取插件/依赖
 ```
 
-运行目录是 `~/.local/share/harness-testkit/`，其中包含 `venv/`、`node/`、`appium/`、`browsers/`、`env.sh` 和 `installation-report.json`。执行 Testkit 命令前使用：
+运行目录是 `~/.local/share/harness-testkit/claude/`，其中包含 `venv/`、`node/`、`appium/`、`browsers/`、`env.sh` 和 `installation-report.json`。执行 Testkit 命令前使用：
 
 ```bash
-source ~/.local/share/harness-testkit/env.sh
+source ~/.local/share/harness-testkit/claude/env.sh
 ```
 
 安装脚本会把这条运行约定加入对应全局指令文件的独立标记块，保留原有内容。重复安装覆盖前保留备份。Playwright MCP 与 Midscene/Puppeteer 使用已准备的浏览器入口，避免 MCP 和稳定 Playwright 使用不同浏览器 revision。
 
 ## MCP 登记
+
+下列为各独立仓库的对应位置；本仓库仅登记自身 agent，不操作其他客户端或共享指令。
 
 - Codex：更新 `~/.codex/config.toml` 的 `mobile-mcp` / `playwright` 表，保留其他服务器和项目信任。
 - Claude Code：更新普通 HOME 与显式 CLAUDE_CONFIG_DIR 的用户 MCP 配置，保留其他服务器和凭据。

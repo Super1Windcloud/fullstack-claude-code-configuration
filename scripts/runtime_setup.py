@@ -36,7 +36,8 @@ def setup(repo, home, selected, run, deploy, env, pending, failures, dry=False, 
         return
     data = read_json(declaration)
     initial_failures = len(failures)
-    runtime = home / '.local/share/harness-testkit'
+    owner = next((name for name in selected if name != 'antigravity-global'), 'antigravity')
+    runtime = home / '.local/share/harness-testkit' / owner
     for directory in (runtime, runtime / 'node', runtime / 'venv', runtime / 'appium', runtime / 'browsers'):
         current = directory
         while current != home:

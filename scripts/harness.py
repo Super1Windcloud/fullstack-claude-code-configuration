@@ -14,6 +14,7 @@ import tempfile
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
+OWNED = ('claude',)
 LOCATIONS = {'codex': '.codex', 'claude': '.claude', 'opencode': '.config/opencode', 'shared': '.agents'}
 LOCATIONS.update({'antigravity': '.gemini/antigravity-cli', 'antigravity-global': '.gemini/config'})
 LOCATIONS.update({'grok': '.grok'})
@@ -136,36 +137,37 @@ def read_json(path):
     return json.loads(path.read_text()) if path.exists() else {}
 
 
-def catalog(home):
-    path = home / '.codex/config.toml'
-    config = tomllib.loads(path.read_text()) if path.exists() else {}
-    markets = config.get('marketplaces', {})
-    plugins = dict(config.get('plugins', {}))
-    for path in (home / '.codex/plugins/cache').glob('*/*/*/.codex-plugin/plugin.json'):
-        market, name = path.parts[-5:-3]
-        plugins.setdefault(f'{name}@{market}', {})
-    codex = []
-    for selector, state in sorted(plugins.items()):
-        source = markets.get(selector.rsplit('@', 1)[-1], {})
-        codex.append({'id': selector, 'enabled': state.get('enabled'),
-                      'source': source.get('source') if source.get('source_type') == 'git' else None,
-                      'remote': selector == 'figma@openai-curated'})
-    markets = read_json(home / '.claude/plugins/known_marketplaces.json')
-    claude = []
-    for selector, installs in read_json(home / '.claude/plugins/installed_plugins.json').get('plugins', {}).items():
-        if any(i.get('scope') == 'user' for i in installs):
-            source = markets.get(selector.rsplit('@', 1)[-1], {}).get('source', {})
-            claude.append({'id': selector, 'source': source.get('repo') or source.get('url')})
+def catalog(home, selected):
+    codex, claude = [], []
+    if 'codex' in selected:
+        path = home / '.codex/config.toml'
+        config = tomllib.loads(path.read_text()) if path.exists() else {}
+        markets = config.get('marketplaces', {})
+        plugins = dict(config.get('plugins', {}))
+        for path in (home / '.codex/plugins/cache').glob('*/*/*/.codex-plugin/plugin.json'):
+            market, name = path.parts[-5:-3]
+            plugins.setdefault(f'{name}@{market}', {})
+        for selector, state in sorted(plugins.items()):
+            source = markets.get(selector.rsplit('@', 1)[-1], {})
+            codex.append({'id': selector, 'enabled': state.get('enabled'),
+                          'source': source.get('source') if source.get('source_type') == 'git' else None,
+                          'remote': selector == 'figma@openai-curated'})
+    if 'claude' in selected:
+        markets = read_json(home / '.claude/plugins/known_marketplaces.json')
+        for selector, installs in read_json(home / '.claude/plugins/installed_plugins.json').get('plugins', {}).items():
+            if any(i.get('scope') == 'user' for i in installs):
+                source = markets.get(selector.rsplit('@', 1)[-1], {}).get('source', {})
+                claude.append({'id': selector, 'source': source.get('repo') or source.get('url')})
     return clean({'version': 1, 'codex': [p for p in codex if is_supported_plugin(p) and p['id'] != 'figma@openai-api-curated'],
                   'claude': [p for p in claude if is_supported_plugin(p)]}, home)
 
 
 def sync(repo, home, selected=None):
-    selected = selected or list(LOCATIONS)
+    selected = selected or list(OWNED)
     # A failed export must not copy a partial configuration into the repository.
     with tempfile.TemporaryDirectory(prefix='harness-sync-') as temporary:
         staging = Path(temporary)
-        manifest = catalog(home)
+        manifest = catalog(home, selected)
         manifest = {key: value for key, value in manifest.items() if key == 'version' or key in selected}
         previous = read_json(repo / 'plugins.json')
         legacy = previous.get('opencode_skill_sources', [])
@@ -304,9 +306,11 @@ def install(repo, home, selected, dry=False, offline=False, dependencies='full')
                 continue
             source = plugin['source']
             market = plugin['id'].rsplit('@', 1)[-1]
-            known = (tomllib.loads((home / '.codex/config.toml').read_text()).get('marketplaces', {})
-                     if harness == 'codex' and (home / '.codex/config.toml').exists()
-                     else read_json(home / '.claude/plugins/known_marketplaces.json'))
+            if harness == 'codex':
+                path = home / '.codex/config.toml'
+                known = tomllib.loads(path.read_text()).get('marketplaces', {}) if path.exists() else {}
+            else:
+                known = read_json(home / '.claude/plugins/known_marketplaces.json')
             try:
                 # A config table alone is not an installed Codex marketplace snapshot.
                 if not plugin.get('remote') and (harness, source) not in registered and (harness == 'codex' or market not in known):
@@ -397,12 +401,12 @@ def main():
     parser.add_argument('command', choices=['sync', 'install'])
     parser.add_argument('--home', type=Path, default=Path.home())
     parser.add_argument('--repo', type=Path, default=ROOT)
-    parser.add_argument('--only', nargs='+', choices=list(LOCATIONS))
+    parser.add_argument('--only', nargs='+', choices=list(OWNED))
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--dependencies', choices=['full', 'core', 'none'], default='full', help='默认准备全部 Testkit 工具；core 仅 Python 核心依赖和 mobile-mcp；none 跳过环境准备')
     parser.add_argument('--offline', action='store_true', help='只部署仓库文件，不拉取插件和依赖')
     args = parser.parse_args()
-    args.only = args.only or read_json(args.repo / '.harness.json').get('selected', list(LOCATIONS))
+    args.only = args.only or list(OWNED)
     if args.command == 'sync':
         if args.dry_run:
             parser.error('sync 不支持 --dry-run；导出只修改配置仓库')

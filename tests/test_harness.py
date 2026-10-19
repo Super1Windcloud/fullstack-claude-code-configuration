@@ -41,7 +41,7 @@ class HarnessTest(unittest.TestCase):
         skill = self.write('original/SKILL.md', 'skill').parent
         (self.home / '.agents/skills').mkdir(parents=True)
         (self.home / '.agents/skills/example').symlink_to(skill)
-        self.quiet(harness.sync, self.repo, self.home)
+        self.quiet(harness.sync, self.repo, self.home, ['codex', 'claude', 'opencode', 'shared'])
         self.assertNotIn('private', (self.repo / 'harness/claude/settings.json').read_text())
         self.assertNotIn('private', (self.repo / 'harness/opencode/opencode.json').read_text())
         self.assertNotIn('projects', (self.repo / 'config.toml').read_text())

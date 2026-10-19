@@ -1,5 +1,15 @@
 # 安装验证记录
 
+## 单 agent 安装隔离验证（2026-10-19）
+
+- `python3 -B -m unittest discover -s /Users/super/super/fullstack-claude-code-configuration/tests`：29 项通过。
+- 真实 shell 入口验证：默认仅部署自身配置与 MCP；保留其他 agent、`~/.agents/`、其他 agent 的 Testkit 环境及旧共享运行文件。
+- 跨 agent 的 `--only` 在写入前拒绝，混合选择和 `--repo` 中的旧跨 agent 范围均不能扩大操作范围。同步忽略其他 agent 的无效配置；预览不执行其他 agent 的插件 CLI，且不写入。
+- 配置部署使用临时 HOME 离线执行；未在用户全局环境重装依赖、执行联网插件安装或验证客户端会话。
+
+以下为此前的依赖与工具验证记录。
+
+
 2026-10-19，macOS ARM64，Node 26.3.1，Python 3.14.6。
 
 - 24 项自动化用例通过：配置备份/凭据保留、目标软链接保护、预览无副作用、离线不下载、托管 MCP 更新、TOML 幂等及 trust 保留、旧配置字段不复活、Testkit/Figma 允许列表。

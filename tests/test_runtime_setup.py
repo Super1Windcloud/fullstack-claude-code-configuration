@@ -82,7 +82,7 @@ class RuntimeTest(unittest.TestCase):
                 runtime.setup(self.repo, self.home, ['opencode'], fail, self.deploy, self.env,
                               self.pending, self.failures, mode='core')
         self.assertTrue(self.failures)
-        report = json.loads((self.home / '.local/share/harness-testkit/installation-report.json').read_text())
+        report = json.loads((self.home / '.local/share/harness-testkit/opencode/installation-report.json').read_text())
         self.assertTrue(report['failed'])
 
     def test_toml_replacement_is_idempotent_and_keeps_unrelated_servers(self):
@@ -110,7 +110,7 @@ class RuntimeTest(unittest.TestCase):
 
     def test_generated_browser_wrapper_has_valid_shell_syntax(self):
         self.call(['opencode'], offline=True, mode='full')
-        wrapper = self.home / '.local/share/harness-testkit/playwright-mcp.sh'
+        wrapper = self.home / '.local/share/harness-testkit/opencode/playwright-mcp.sh'
         result = subprocess.run(['bash', '-n', str(wrapper)], capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('--executable-path', wrapper.read_text())
@@ -123,7 +123,7 @@ class RuntimeTest(unittest.TestCase):
 
 
     def test_existing_runtime_directory_symlink_is_rejected(self):
-        runtime_dir = self.home / '.local/share/harness-testkit'
+        runtime_dir = self.home / '.local/share/harness-testkit/antigravity'
         runtime_dir.mkdir(parents=True)
         outside = self.root / 'outside'
         outside.mkdir()
