@@ -1,5 +1,42 @@
 # Fullstack Claude Code Configuration 🚀
 
+## 配置、skills 与插件的同步安装
+
+本仓库可独立使用，安装不依赖其他配置仓库。需要 Python 3.11+、Git 和对应 CLI；OpenCode 依赖安装需要 npm。
+
+```bash
+# 仓库绝对路径执行；同步本机配置及 skills 到仓库
+/path/to/fullstack-claude-code-configuration/sync.sh
+
+# 查看安装计划，不修改本机、不联网安装
+/path/to/fullstack-claude-code-configuration/install.sh --dry-run
+
+# 安装配置、共享 skills 和插件
+/path/to/fullstack-claude-code-configuration/install.sh
+
+# 仅部署仓库内文件，报告尚未恢复的插件与外部依赖
+/path/to/fullstack-claude-code-configuration/install.sh --offline
+```
+
+- `.harness.json` 声明本仓库的布局和默认同步范围；`scripts/harness.py` 随仓库分发，可独立运行。
+- 原有全局指令、配置、状态栏和 hooks 保持各自布局；新增 `harness/shared/skills/` 保存共享 skills 及其配套资源。
+- 安装将共享 skills 同时部署到 `~/.agents/skills/` 和 Claude Code 原生目录 `~/.claude/skills/`，不依赖软链接或其他工具的插件缓存。
+- `plugins.json` 记录可恢复的插件来源；有来源的插件通过真实 CLI 安装，插件附带的 skills 随插件恢复。
+- 覆盖前备份到 `~/.harness-backups/<时间>/`；JSON 配置合并保留本机凭据，不清空用户技能或其他配置。
+- 常见凭据字段不入库，拒绝沿目标软链接覆盖其他文件。skills 包保留原始内容，包括上游测试样例；提交前仍需检查自定义资源中的凭据。
+- `--home /path/to/home` 可导出或安装到指定用户目录；正常目录软链接在导出时展开，运行时缓存、登录状态和会话不纳入同步。
+- 同步采用增量覆盖，不自动删除仓库文件。第三方插件按市场当前版本恢复，不承诺锁定全部插件版本。缺少 CLI 或离线跳过的项目会逐项列出，安装失败返回非零状态。
+
+Claude 插件使用 `claude plugin marketplace add` 和 `claude plugin install` 安装，不复制 `installed_plugins.json` 冒充安装完成。原 `plugins/` 登记文件保留作历史参考，安装来源以根目录 `plugins.json` 为准。安装结束恢复配置中的插件启用状态。
+
+验证：
+
+```bash
+python3 -B -m unittest discover -s /path/to/fullstack-claude-code-configuration/tests -v
+bash -n /path/to/fullstack-claude-code-configuration/install.sh /path/to/fullstack-claude-code-configuration/sync.sh
+```
+
+
 一套专为全栈工程师（**Android / Kotlin / Gradle / Compose、Rust / Tauri、Web / TypeScript / Tailwind、Python**）量身定制的 Claude Code 生产级全局配置。
 
 提供**最高工程自由度、日常零打扰、高危硬防线、毫秒级状态感知与依赖共享**的极致开发体验。

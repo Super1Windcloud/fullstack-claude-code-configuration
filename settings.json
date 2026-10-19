@@ -15,7 +15,6 @@
     "GIT_EDITOR": "true",
     "HOMEBREW_NO_AUTO_UPDATE": "1",
     "ANTHROPIC_BASE_URL": "https://deepseek-api.org",
-    "ANTHROPIC_AUTH_TOKEN": "sk-YOUR_API_KEY_HERE",
     "ANTHROPIC_MODEL": "deepseek-v4.1-flash-1017"
   },
   "permissions": {

@@ -25,3 +25,13 @@ session-env/
 plugins/marketplaces/
 plugins/cache/
 plugins/plugin-catalog-cache.json
+
+__pycache__/
+
+*.pyc
+
+.harness-backups/
+
+vendor/
+
+*.bak*

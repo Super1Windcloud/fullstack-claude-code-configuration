@@ -1,0 +1,9 @@
+{
+  "roots": {
+    "claude": "."
+  },
+  "selected": [
+    "claude",
+    "shared"
+  ]
+}

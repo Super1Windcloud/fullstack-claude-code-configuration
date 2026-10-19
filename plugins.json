@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "claude": [
+    {
+      "id": "figma@claude-plugins-official",
+      "source": "anthropics/claude-plugins-official"
+    },
+    {
+      "id": "frontend-design@claude-plugins-official",
+      "source": "anthropics/claude-plugins-official"
+    },
+    {
+      "id": "claude-code-setup@claude-plugins-official",
+      "source": "anthropics/claude-plugins-official"
+    },
+    {
+      "id": "testkit@testkit",
+      "source": "winhok/testkit"
+    }
+  ]
+}
