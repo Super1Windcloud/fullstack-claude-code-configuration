@@ -35,3 +35,6 @@ __pycache__/
 vendor/
 
 *.bak*
+
+# Skills are restored from Testkit upstream; never vendor local skill packages.
+skills/

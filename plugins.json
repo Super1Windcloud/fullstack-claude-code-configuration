@@ -2,20 +2,13 @@
   "version": 1,
   "claude": [
     {
-      "id": "figma@claude-plugins-official",
-      "source": "anthropics/claude-plugins-official"
-    },
-    {
-      "id": "frontend-design@claude-plugins-official",
-      "source": "anthropics/claude-plugins-official"
-    },
-    {
-      "id": "claude-code-setup@claude-plugins-official",
-      "source": "anthropics/claude-plugins-official"
-    },
-    {
       "id": "testkit@testkit",
       "source": "winhok/testkit"
     }
-  ]
+  ],
+  "testkit_skill_source": {
+    "url": "https://github.com/winhok/testkit.git",
+    "ref": "0c80ac38944bb70c6a60305c174dbc2a6a9767f2",
+    "subdir": "skills"
+  }
 }

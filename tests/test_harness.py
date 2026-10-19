@@ -33,7 +33,7 @@ class HarnessTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return function(*args, **kwargs)
 
-    def test_export_redacts_secrets_and_materializes_skills(self):
+    def test_export_redacts_secrets_and_excludes_unrelated_skills(self):
         self.write('.codex/config.toml', '# key=sk-' + 'a' * 30 + '\nmodel="example"\n[projects."/host"]\ntrust_level="trusted"\n')
         self.write('.claude/settings.json', json.dumps({'env': {'ANTHROPIC_AUTH_TOKEN': 'private', 'FEATURE': '1'}}))
         self.write('.config/opencode/opencode.json', json.dumps({'provider': {'x': {'apiKey': 'private'}}}))
@@ -46,7 +46,7 @@ class HarnessTest(unittest.TestCase):
         self.assertNotIn('private', (self.repo / 'harness/opencode/opencode.json').read_text())
         self.assertNotIn('projects', (self.repo / 'config.toml').read_text())
         self.assertFalse((self.repo / 'auth.json').exists())
-        self.assertEqual((self.repo / 'harness/shared/skills/example/SKILL.md').read_text(), 'skill')
+        self.assertFalse((self.repo / 'harness/shared/skills/example/SKILL.md').exists())
         self.assertFalse((self.repo / 'harness/shared/skills/example').is_symlink())
 
     def test_dry_run_makes_no_changes(self):
@@ -80,23 +80,23 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(list(outside.iterdir()), [])
 
     def test_cli_installs_actual_plugin_and_restores_enable_flags(self):
-        self.write('config.toml', '[plugins."demo@example"]\nenabled=false\n[marketplaces.example]\nsource_type="git"\nsource="owner/repo"\n', self.repo)
-        self.write('plugins.json', json.dumps({'codex': [{'id': 'demo@example', 'source': 'owner/repo'}]}), self.repo)
+        self.write('config.toml', '[plugins."testkit@example"]\nenabled=false\n[marketplaces.example]\nsource_type="git"\nsource="owner/repo"\n', self.repo)
+        self.write('plugins.json', json.dumps({'codex': [{'id': 'testkit@example', 'source': 'owner/repo'}]}), self.repo)
         calls = []
         def fake_run(command, **kwargs):
             calls.append((command, kwargs))
             if command[2] == 'add':
-                (self.home / '.codex/config.toml').write_text('[plugins."demo@example"]\nenabled=true\n')
+                (self.home / '.codex/config.toml').write_text('[plugins."testkit@example"]\nenabled=true\n')
         with patch.object(harness.shutil, 'which', return_value='/fake/codex'), patch.object(harness.subprocess, 'run', side_effect=fake_run):
             self.quiet(harness.install, self.repo, self.home, ['codex'])
         self.assertEqual(calls[0][0], ['codex', 'plugin', 'marketplace', 'add', 'owner/repo'])
-        self.assertEqual(calls[1][0], ['codex', 'plugin', 'add', 'demo@example'])
+        self.assertEqual(calls[1][0], ['codex', 'plugin', 'add', 'testkit@example'])
         self.assertEqual(calls[1][1]['env']['CODEX_HOME'], str(self.home / '.codex'))
         self.assertIn('enabled=false', (self.home / '.codex/config.toml').read_text())
 
     def test_failed_plugin_returns_failure_and_restores_settings(self):
-        self.write('config.toml', '[plugins."demo@example"]\nenabled=false\n', self.repo)
-        self.write('plugins.json', json.dumps({'codex': [{'id': 'demo@example', 'source': 'owner/repo'}]}), self.repo)
+        self.write('config.toml', '[plugins."testkit@example"]\nenabled=false\n', self.repo)
+        self.write('plugins.json', json.dumps({'codex': [{'id': 'testkit@example', 'source': 'owner/repo'}]}), self.repo)
         def fail(command, **kwargs):
             (self.home / '.codex/config.toml').write_text('changed=true\n')
             raise harness.subprocess.CalledProcessError(1, command)
@@ -114,19 +114,19 @@ class HarnessTest(unittest.TestCase):
         self.assertFalse((self.repo / 'config.toml').exists())
         self.assertNotIn('codex', json.loads((self.repo / 'plugins.json').read_text()))
 
-    def test_shared_skills_are_installed_into_native_paths(self):
+    def test_unrelated_skills_are_not_deployed(self):
         content = 'https://user:fake@api.example.invalid/fixture'
         self.write('.agents/skills/example/SKILL.md', content)
         self.quiet(harness.sync, self.repo, self.home, ['shared'])
         self.quiet(harness.install, self.repo, self.home, ['claude', 'opencode', 'antigravity-global', 'shared'], offline=True)
         for name in ('.claude', '.config/opencode', '.gemini/config'):
-            self.assertEqual((self.home / name / 'skills/example/SKILL.md').read_text(), content)
+            self.assertFalse((self.home / name / 'skills/example/SKILL.md').exists())
 
     def test_antigravity_uses_actual_plugin_installer(self):
-        self.write('plugins.json', json.dumps({'antigravity': [{'id': 'demo', 'source': 'https://example.invalid/demo.git'}]}), self.repo)
+        self.write('plugins.json', json.dumps({'antigravity': [{'id': 'testkit', 'source': 'https://example.invalid/testkit.git'}]}), self.repo)
         with patch.object(harness.shutil, 'which', return_value='/fake/agy'), patch.object(harness.subprocess, 'run') as run:
             self.quiet(harness.install, self.repo, self.home, ['antigravity'])
-        self.assertEqual(run.call_args.args[0], ['agy', 'plugin', 'install', 'https://example.invalid/demo.git'])
+        self.assertEqual(run.call_args.args[0], ['agy', 'plugin', 'install', 'https://example.invalid/testkit.git'])
 
     def test_legacy_opencode_link_is_backed_up_before_migration(self):
         legacy = self.home / '.config/opencode/skills/testkit'
@@ -138,10 +138,39 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(os.readlink(saved[0]), '../vendor/testkit/skills')
 
     def test_sync_preserves_external_skill_sources_after_link_migration(self):
-        sources = [{'url': 'https://example.invalid/skills.git', 'ref': 'commit', 'subdir': 'skills'}]
+        sources = [{'url': 'https://github.com/winhok/testkit.git', 'ref': 'commit', 'subdir': 'skills'}]
         self.write('plugins.json', json.dumps({'opencode_skill_sources': sources}), self.repo)
         self.quiet(harness.sync, self.repo, self.home, ['opencode'])
-        self.assertEqual(json.loads((self.repo / 'plugins.json').read_text())['opencode_skill_sources'], sources)
+        self.assertEqual(json.loads((self.repo / 'plugins.json').read_text())['testkit_skill_source'], sources[0])
+
+
+    def test_plugin_catalog_contains_only_testkit(self):
+        self.write('.claude/plugins/installed_plugins.json', json.dumps({'plugins': {
+            'testkit@testkit': [{'scope': 'user'}],
+            'frontend-design@official': [{'scope': 'user'}]}}))
+        self.quiet(harness.sync, self.repo, self.home, ['claude', 'antigravity', 'codex'])
+        manifest = json.loads((self.repo / 'plugins.json').read_text())
+        for name in ('claude', 'antigravity', 'codex'):
+            self.assertTrue(manifest[name])
+            self.assertTrue(all(harness.is_testkit(plugin) for plugin in manifest[name]))
+
+    def test_legacy_unrelated_plugin_is_not_installed(self):
+        self.write('plugins.json', json.dumps({'claude': [
+            {'id': 'frontend-design@official', 'source': 'owner/repo'}]}), self.repo)
+        with patch.object(harness.subprocess, 'run') as run:
+            self.quiet(harness.install, self.repo, self.home, ['claude'])
+        run.assert_not_called()
+
+    def test_testkit_skills_install_into_codex_and_opencode(self):
+        source = dict(harness.TESTKIT_SOURCE)
+        self.write('plugins.json', json.dumps({'testkit_skill_source': source}), self.repo)
+        checkout = self.home / '.cache/harness-skills' / source['ref']
+        self.write('skills/testspec-plan/SKILL.md', 'Testkit', checkout)
+        with patch.object(harness.subprocess, 'run') as run:
+            self.quiet(harness.install, self.repo, self.home, ['codex', 'opencode'])
+        for name in ('.codex', '.config/opencode'):
+            self.assertEqual((self.home / name / 'skills/testspec-plan/SKILL.md').read_text(), 'Testkit')
+        self.assertEqual(run.call_args.args[0], ['git', '-C', str(checkout), 'checkout', '--detach', source['ref']])
 
 
 if __name__ == '__main__':
