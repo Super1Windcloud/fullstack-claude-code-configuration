@@ -389,6 +389,12 @@ def install(repo, home, selected, dry=False, offline=False, dependencies='full')
         spec.loader.exec_module(module)
         module.setup(repo, home, selected, run, lambda source, dest: deploy(source, dest, False),
                      env, pending, failures, dry=dry, offline=offline, mode=dependencies)
+    mitmproxy_setup = repo / 'scripts/mitmproxy_setup.py'
+    if mitmproxy_setup.exists() and dependencies != 'none':
+        spec = importlib.util.spec_from_file_location('harness_mitmproxy_setup', mitmproxy_setup)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.setup(repo, home, selected, dry=dry, offline=offline)
     print(f"{'预览' if dry else '已部署'} {count} 个文件；备份目录：{backup}")
     if pending:
         print('以下项目未由本次脚本安装：\n' + '\n'.join('  - ' + item for item in pending))
