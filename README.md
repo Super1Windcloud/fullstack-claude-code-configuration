@@ -1,5 +1,49 @@
 # Fullstack Claude Code Configuration 🚀
 
+## Quick Start（快速开始）
+
+以下命令假定仓库已位于 `~/super/fullstack-claude-code-configuration`；其他位置请替换为实际绝对路径，命令可从任意工作目录执行。
+
+### 1. 准备环境
+
+准备 Bash、Python 3.11+、Git 和 uv（提供 `uvx`），并单独安装、完成 Claude Code 客户端的登录或 API 凭据配置。安装脚本部署 Harness 配置与插件，不负责客户端本体和账号登录。
+
+```bash
+python3 --version
+command -v git uvx claude
+```
+
+完整工具环境需要 Node 24+、npm 10+；macOS 缺少依赖时脚本会尝试通过已有 Homebrew 补齐。详细依赖见 [运行环境说明](runtime/README.md)。
+
+### 2. 将仓库配置安装到本机
+
+```bash
+# 先预览：不写入、不下载
+~/super/fullstack-claude-code-configuration/install.sh --dry-run
+# 再安装：部署配置并联网恢复插件、依赖
+~/super/fullstack-claude-code-configuration/install.sh
+```
+
+覆盖前的文件备份到 `~/.harness-backups/`。安装后查看输出中的失败或待安装项，重启 Claude Code 客户端或新建会话加载配置；需要授权的插件和 MCP 在客户端完成授权。
+
+### 3. 验证与日常备份
+
+验证仓库脚本：
+
+```bash
+python3 -B -m unittest discover -s ~/super/fullstack-claude-code-configuration/tests -v
+```
+
+本机配置调整后，再将本机配置导出到仓库并检查差异：
+
+```bash
+~/super/fullstack-claude-code-configuration/sync.sh
+git -C ~/super/fullstack-claude-code-configuration diff --stat
+git -C ~/super/fullstack-claude-code-configuration diff
+```
+
+`install.sh` 的方向是「仓库 → 本机」，`sync.sh` 的方向是「本机 → 仓库」；新机器还原从安装开始。同步会修改仓库文件，不会自动 commit 或 push，提交前检查差异中是否含敏感内容。单测验证脚本行为，实际插件和 MCP 是否可用仍需在客户端确认。
+
 安装与同步仅操作 `~/.claude/` 和 `~/.claude.json`，不读写其他 agent 或 `~/.agents/` 的配置。`--only` 仅接受本仓库所属 agent，跨 agent 参数会在执行前报错；`--repo` 不会扩大范围。 Testkit 运行环境独立存放于 `~/.local/share/harness-testkit/claude/`；系统工具仍复用本机安装。
 
 ## Testkit 完整依赖与 Figma 安装
