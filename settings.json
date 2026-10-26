@@ -111,15 +111,6 @@
             "command": "bash ~/.claude/hooks/guard-bash.sh"
           }
         ]
-      },
-      {
-        "matcher": "mcp__.*__.*delete.*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/guard-mcp.sh"
-          }
-        ]
       }
     ]
   },

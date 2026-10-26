@@ -1,6 +1,6 @@
 # Fullstack Claude Code Configuration 🚀
 
-当前权限配置为精简放行模式：`bypassPermissions` 下移除冗余 `allow` / `ask` 列表，仅保留 6 条 `permissions.deny` 兜底（`mkfs`、`diskutil erase`、`~/.ssh`、`~/.aws`、`/etc`），并启用 Hooks（`disableAllHooks: false`）。`guard-bash.sh` 只拦截危险度 ≥90% 的操作：毁灭性命令与裸 `cd` 直接 deny；非产物目录递归删除、抹除未提交改动或恢复手段的 Git 操作、强推、PR/Release/包发布、远程脚本执行、外网文件外发、长期凭据读取和 `sudo` 需确认；其余可恢复的本地操作（如 `branch -D`、`killall`、`adb uninstall`、`docker prune`、读取 `.env`）一律放行。`guard-mcp.sh` 仅对 `delete` 类 MCP 调用确认。下文 Hook 防护说明中超出上述范围的规则为历史版本描述。
+当前权限配置为精简放行模式：`bypassPermissions` 下移除冗余 `allow` / `ask` 列表，仅保留 6 条 `permissions.deny` 兜底（`mkfs`、`diskutil erase`、`~/.ssh`、`~/.aws`、`/etc`），并启用 Hooks（`disableAllHooks: false`）。`guard-bash.sh` 只拦截危险度 ≥90% 的操作：毁灭性命令与裸 `cd` 直接 deny；非产物目录递归删除、抹除未提交改动或恢复手段的 Git 操作、强推、PR/Release/包发布、远程脚本执行、外网文件外发、长期凭据读取和 `sudo` 需确认；其余可恢复的本地操作（如 `branch -D`、`killall`、`adb uninstall`、`docker prune`、读取 `.env`）一律放行。MCP 调用不再经过 Hook 拦截。下文 Hook 防护说明中超出上述范围的规则为历史版本描述。
 
 ## Quick Start（快速开始）
 
@@ -243,8 +243,7 @@ git -C ~/super/fullstack-claude-code-configuration diff
 ├── CLAUDE.md                  # 全栈工程防线与交付契约
 ├── install.sh                 # 一键快速安装与热更新脚本
 ├── hooks/                     # Claude Code 核心安全防护生命周期钩子
-│   ├── guard-bash.sh          # PreToolUse 递归解包深度审计与 0 Fork 极速高危拦截引擎
-│   └── guard-mcp.sh           # PreToolUse MCP 工具高危写操作与外部资源变更防线
+│   └── guard-bash.sh          # PreToolUse 递归解包深度审计与 0 Fork 极速高危拦截引擎
 ├── .gitignore                 # 忽略运行时会话、缓存与历史数据
 └── README.md                  # 详细架构、攻防矩阵与说明文档
 ```
