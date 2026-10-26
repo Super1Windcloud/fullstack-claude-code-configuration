@@ -1,6 +1,6 @@
 # Fullstack Claude Code Configuration 🚀
 
-当前权限配置已放宽：移除原有 `permissions.deny` 列表，设置 `disableAllHooks: true`，保留 `bypassPermissions` 和跳过危险模式权限提示。环境变量、状态栏、插件、Worktree、界面设置及 Hook 注册配置均保留；下文 Hook 防护说明供参考，当前已禁用全部 Hooks。
+当前权限配置为精简放行模式：`bypassPermissions` 下移除冗余 `allow` / `ask` 列表，仅保留 6 条 `permissions.deny` 兜底（`mkfs`、`diskutil erase`、`~/.ssh`、`~/.aws`、`/etc`），并启用 Hooks（`disableAllHooks: false`）。`guard-bash.sh` 只拦截危险度 ≥90% 的操作：毁灭性命令与裸 `cd` 直接 deny；非产物目录递归删除、抹除未提交改动或恢复手段的 Git 操作、强推、PR/Release/包发布、远程脚本执行、外网文件外发、长期凭据读取和 `sudo` 需确认；其余可恢复的本地操作（如 `branch -D`、`killall`、`adb uninstall`、`docker prune`、读取 `.env`）一律放行。`guard-mcp.sh` 仅对 `delete` 类 MCP 调用确认。下文 Hook 防护说明中超出上述范围的规则为历史版本描述。
 
 ## Quick Start（快速开始）
 

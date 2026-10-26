@@ -16,6 +16,14 @@
     "HOMEBREW_NO_AUTO_UPDATE": "1"
   },
   "permissions": {
+    "deny": [
+      "Bash(mkfs*)",
+      "Bash(diskutil erase*)",
+      "Read(~/.ssh/**)",
+      "Edit(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Edit(//etc/**)"
+    ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
       "~/super",
@@ -38,28 +46,6 @@
       "/tmp"
     ]
   },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/guard-bash.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__.*__(use_figma|create|batch|delete|upload_assets|generate_figma_design|create_.*|update_.*|delete_.*|modify_.*)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/guard-mcp.sh"
-          }
-        ]
-      }
-    ]
-  },
   "worktree": {
     "symlinkDirectories": [
       "node_modules",
@@ -71,10 +57,15 @@
     "baseRef": "head",
     "bgIsolation": "none"
   },
+  "disableAllHooks": false,
   "statusLine": {
     "type": "command",
     "command": "zsh ~/.claude/statusline-command.sh",
     "refreshInterval": 10
+  },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "zsh ~/.claude/statusline-command.sh"
   },
   "enabledPlugins": {
     "figma@claude-plugins-official": true,
@@ -99,12 +90,10 @@
   "language": "zh-CN",
   "effortLevel": "medium",
   "tui": "default",
-  "timeFormat": "auto",
   "autoMemoryEnabled": true,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
-  "verbose": true,
   "autoCompactEnabled": true,
   "wheelScrollAccelerationEnabled": true,
   "fileCheckpointingEnabled": true,
@@ -112,5 +101,28 @@
   "terminalProgressBarEnabled": true,
   "autoConnectIde": true,
   "diffTool": "auto",
-  "disableAllHooks": true
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/guard-bash.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*__.*delete.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/guard-mcp.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "timeFormat": "auto",
+  "verbose": true
 }
