@@ -1,5 +1,9 @@
 # Fullstack Claude Code Configuration 🚀
 
+当前 `settings.json` 已同步本机的放宽配置：默认权限模式为 `bypassPermissions`，设置 `disableAllHooks: true`，并跳过危险模式权限提示。该文件不再包含原有的权限拒绝列表、Hook 注册、状态栏和其他个性化设置。
+
+仓库仍保留原有 Hook、状态栏脚本及下文的功能说明，供需要时参考；当前设置未启用这些脚本。
+
 ## Quick Start（快速开始）
 
 以下命令假定仓库已位于 `~/super/fullstack-claude-code-configuration`；其他位置请替换为实际绝对路径，命令可从任意工作目录执行。
