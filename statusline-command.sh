@@ -11,6 +11,24 @@
 input=$(cat)
 [ -z "$input" ] && exit 0
 
+# subagentStatusLine 协议：输入含 tasks[]，每个任务输出一行 {"id","content"} JSON（纯文本行会被丢弃）
+# content 示例：haiku-4-5·high 18k/200k 9% 1m23s
+if [[ "$input" == *'"tasks"'* ]]; then
+  sub_out=$(jq -c '
+    def tok: if . >= 1000000 then "\(. / 100000 | round / 10)M" elif . >= 1000 then "\(. / 1000 | round)k" else tostring end;
+    def dur: if . >= 3600 then "\(. / 3600 | floor)h\(. % 3600 / 60 | floor)m" elif . >= 60 then "\(. / 60 | floor)m\(. % 60)s" else "\(.)s" end;
+    select(.tasks | type == "array") | .tasks[] | select(.id) | {id: (.id | tostring), content: ([
+      (((.model // "") | sub("^claude-"; "") | sub("-[0-9]{8}$"; "")) + (if .effort then "·\(.effort)" else "" end)),
+      ((.tokenCount // 0) as $t | (.contextWindowSize // 0) as $m |
+        if $t > 0 and $m > 0 then "\($t | tok)/\($m | tok) \($t * 100 / $m | round)%" elif $t > 0 then ($t | tok) else "" end),
+      (if .status == "running" and (.startTime | type) == "number" then ((now - .startTime / 1000) | floor | if . > 0 then dur else "" end)
+       elif .status and .status != "running" then .status else "" end)
+    ] | map(select(. != "")) | join(" "))}
+  ' <<<"$input" 2>/dev/null)
+  # 主状态栏输入（如会话名含 tasks 字样）不会产出任务行，继续走常规渲染
+  [ -n "$sub_out" ] && { print -r -- "$sub_out"; exit 0; }
+fi
+
 zmodload zsh/datetime 2>/dev/null
 zmodload zsh/stat 2>/dev/null
 setopt extendedglob 2>/dev/null
@@ -24,7 +42,7 @@ term_cols="${STATUSLINE_WIDTH:-$COLUMNS}"
 # ---------------------------------------------------------
 # 1. Single-pass JQ (提取 2.1.285 官方纯净真实字段)
 # ---------------------------------------------------------
-IFS=$'\x1f' read -r cwd model effort remaining used_pct used_tok max_tok cost rl5h rl5h_reset rl7d rl7d_reset lines_add lines_del ws_worktree fast_mode cache_warm cache_expires_at cache_observed cache_hit_ratio cache_misses cache_last_miss cache_miss_causes agent_name session_name < <(jq -r '
+IFS=$'\x1f' read -r cwd model effort remaining used_pct used_tok max_tok cost rl5h rl5h_reset rl7d rl7d_reset lines_add lines_del ws_worktree fast_mode cache_warm cache_expires_at cache_observed cache_hit_ratio cache_misses cache_last_miss cache_miss_causes agent_name session_name pr_num pr_review vim_mode < <(jq -r '
   [
     .cwd // "",
     (.model.display_name // .model.id // ""),
@@ -50,7 +68,10 @@ IFS=$'\x1f' read -r cwd model effort remaining used_pct used_tok max_tok cost rl
     (.prompt_cache.last_miss_at // ""),
     ((.prompt_cache.last_miss_cause.causes // []) | map({"tools_changed":"tools","system_prompt_changed":"sys","ttl_expired_5m":"ttl","likely_server_side":"srv"}[.] // .) | join(",")),
     (.agent.name // ""),
-    (.session_name // "")
+    (.session_name // ""),
+    (.pr.number // ""),
+    (.pr.review_state // "" | ascii_downcase),
+    (.vim.mode // "")
   ] | map(tostring) | join("\u001f")
 ' <<<"$input")
 
@@ -126,7 +147,8 @@ if [ -n "$git_dir" ] && [ -d "$git_dir" ]; then
     # Async cached dirty & upstream check (3s TTL, 用户独立临时目录与进程锁)
     tmp_base="${TMPDIR:-/tmp}"
     tmp_base="${tmp_base%/}"
-    h="${git_root//[\/.]/_}"
+    # 可逆转义（先 % 后 /），避免 /a/b_c 与 /a/b/c 映射到同一缓存文件
+    h="${${git_root//\%/%25}//\//%2F}"
     cache_file="${tmp_base}/claude_git_${h}.cache"
     lock_file="${tmp_base}/claude_git_${h}.lock"
     now=$EPOCHSECONDS
@@ -198,7 +220,10 @@ else
   rel_path="${cwd/#$home/~}"
   parts=(${(s:/:)rel_path})
   if (( ${#parts} > 3 )); then
-    dir_str="~/.../${parts[-2]}/${parts[-1]}"
+    # 前缀单独拼接：避免字面量 "~" + "/" 被 harness.py 部署时替换为绝对路径；非 HOME 路径不加 ~
+    dir_prefix=""
+    [[ "$rel_path" == "~"* ]] && dir_prefix="~"
+    dir_str="${dir_prefix}/.../${parts[-2]}/${parts[-1]}"
   else
     dir_str="$rel_path"
   fi
@@ -309,13 +334,15 @@ if (( used_num > 0 )); then
   fi
 fi
 
-# 统一已用百分比 used_int
+# 统一已用百分比 used_int（两种来源均四舍五入，避免相差 1%）
 used_int=""
+typeset -i _ui
 if [[ "$used_pct" =~ ^[0-9.]+$ ]]; then
-  used_int=${used_pct%.*}
+  (( _ui = used_pct + 0.5 ))
+  used_int=$_ui
 elif [[ "$remaining" =~ ^[0-9.]+$ ]]; then
-  rem_val=${remaining%.*}
-  used_int=$(( 100 - rem_val ))
+  (( _ui = 100 - remaining + 0.5 ))
+  used_int=$_ui
 elif (( max_num > 0 && used_num > 0 )); then
   used_int=$(( used_num * 100 / max_num ))
 fi
@@ -360,29 +387,29 @@ if [[ "$rl5h" =~ ^[0-9.]+$ ]]; then
   else
     printf -v rl_part ' \033[2m5h:%d%%\033[0m' "$rl_int"
   fi
+fi
 
-  # 7 天用量仅在 ≥50% 时显示，≥80% 红色并附带重置时间；低用量（<50%）不显示以消除噪音
-  if [[ "$rl7d" =~ ^[0-9.]+$ ]] && (( ${rl7d%.*} >= 50 )); then
-    rl7d_int=${rl7d%.*}
-    reset_7d_str=""
-    if (( rl7d_int >= 80 )) && [[ "$rl7d_reset" =~ ^[0-9]+$ ]]; then
-      left_7d=$(( rl7d_reset - EPOCHSECONDS ))
-      if (( left_7d > 0 )); then
-        if (( left_7d >= 86400 )); then
-          reset_7d_str="→$(( left_7d / 86400 ))d$(( (left_7d % 86400) / 3600 ))h"
-        elif (( left_7d >= 3600 )); then
-          reset_7d_str="→$(( left_7d / 3600 ))h$(( (left_7d % 3600) / 60 ))m"
-        else
-          reset_7d_str="→$(( (left_7d + 59) / 60 ))m"
-        fi
+# 7 天用量仅在 ≥50% 时显示，≥80% 红色并附带重置时间；低用量（<50%）不显示以消除噪音
+if [[ "$rl7d" =~ ^[0-9.]+$ ]] && (( ${rl7d%.*} >= 50 )); then
+  rl7d_int=${rl7d%.*}
+  reset_7d_str=""
+  if (( rl7d_int >= 80 )) && [[ "$rl7d_reset" =~ ^[0-9]+$ ]]; then
+    left_7d=$(( rl7d_reset - EPOCHSECONDS ))
+    if (( left_7d > 0 )); then
+      if (( left_7d >= 86400 )); then
+        reset_7d_str="→$(( left_7d / 86400 ))d$(( (left_7d % 86400) / 3600 ))h"
+      elif (( left_7d >= 3600 )); then
+        reset_7d_str="→$(( left_7d / 3600 ))h$(( (left_7d % 3600) / 60 ))m"
+      else
+        reset_7d_str="→$(( (left_7d + 59) / 60 ))m"
       fi
     fi
+  fi
 
-    if (( rl7d_int >= 80 )); then
-      printf -v rl7d_part ' \033[1;31m7d:%d%%%s\033[0m' "$rl7d_int" "$reset_7d_str"
-    else
-      printf -v rl7d_part ' \033[1;33m7d:%d%%\033[0m' "$rl7d_int"
-    fi
+  if (( rl7d_int >= 80 )); then
+    printf -v rl7d_part ' \033[1;31m7d:%d%%%s\033[0m' "$rl7d_int" "$reset_7d_str"
+  else
+    printf -v rl7d_part ' \033[1;33m7d:%d%%\033[0m' "$rl7d_int"
   fi
 fi
 
@@ -449,11 +476,33 @@ if [ "$fast_mode" = "true" ]; then
   printf -v mode_part ' \033[33m⚡fast\033[0m'
 fi
 
+# Vim 模式（仅启用时存在）：NORMAL 等非插入态黄色高亮，INSERT 暗色
+vim_part=""
+if [ -n "$vim_mode" ]; then
+  if [ "$vim_mode" = "INSERT" ]; then
+    printf -v vim_part ' \033[2m[I]\033[0m'
+  else
+    printf -v vim_part ' \033[1;33m[%s]\033[0m' "${vim_mode:0:1}"
+  fi
+fi
+
+# ---------------------------------------------------------
+# 12b. 当前分支 PR 与评审状态（PR#42✓ 已批准 / ✗ 要求修改 / 其余暗色）
+# ---------------------------------------------------------
+pr_part=""
+if [[ "$pr_num" =~ ^[0-9]+$ ]]; then
+  case "$pr_review" in
+    approved) printf -v pr_part ' \033[32mPR#%s✓\033[0m' "$pr_num" ;;
+    changes_requested) printf -v pr_part ' \033[1;33mPR#%s✗\033[0m' "$pr_num" ;;
+    *) printf -v pr_part ' \033[2mPR#%s\033[0m' "$pr_num" ;;
+  esac
+fi
+
 # ---------------------------------------------------------
 # 13. 费用估算（仅非订阅账号显示，纯 printf -v 零 subshell）
 # ---------------------------------------------------------
 cost_part=""
-if [ -z "$rl_part" ] && [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
+if [ -z "$rl5h$rl7d" ] && [ -n "$cost" ] && [[ "$cost" =~ ^[0-9.]+$ ]]; then
   printf -v cost_float '%.2f' "$cost" 2>/dev/null
   if [[ -n "$cost_float" && "$cost_float" != "0.00" ]]; then
     printf -v cost_part ' \033[2m~$%s\033[0m' "$cost_float"
@@ -476,16 +525,16 @@ avail=$(( term_cols - 2 ))
 
 assemble_line() {
   local esc=$'\e'
-  cur_line="${dir_part}${stack_part}${branch_part}${agent_part}${model_part}${ctx_pct_part}${ctx_tok_part}${rl_part}${rl7d_part}${cache_part}${hit_part}${miss_part}${lines_part}${mode_part}${cost_part}${session_part}"
+  cur_line="${dir_part}${stack_part}${branch_part}${pr_part}${agent_part}${model_part}${ctx_pct_part}${ctx_tok_part}${rl_part}${rl7d_part}${cache_part}${hit_part}${miss_part}${lines_part}${mode_part}${vim_part}${cost_part}${session_part}"
   local plain="${cur_line//${esc}\[[0-9;]#m/}"
   cur_len=${(m)#plain}
 }
 
 # 优先级组合（由低到高逐级丢弃次要项）
-# 核心保留指标：dir + branch + ctx_pct(ctx:xx%) + rl(5h) + mode
-# 丢弃链：session -> stack -> lines -> cache -> hit -> model -> rl7d -> miss -> agent -> ctx_tok
+# 核心保留指标：dir + branch + ctx_pct(ctx:xx%) + rl(5h) + mode + vim
+# 丢弃链：session -> stack -> lines -> cache -> hit -> pr -> model -> rl7d -> miss -> agent -> ctx_tok
 assemble_line
-for p in session_part stack_part lines_part cache_part hit_part model_part rl7d_part miss_part agent_part ctx_tok_part; do
+for p in session_part stack_part lines_part cache_part hit_part pr_part model_part rl7d_part miss_part agent_part ctx_tok_part; do
   (( cur_len > avail )) || break
   : ${(P)p::=}
   assemble_line
