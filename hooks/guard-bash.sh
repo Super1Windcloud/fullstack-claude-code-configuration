@@ -27,6 +27,10 @@ fi
 LOG_DIR="$HOME/.claude/logs"
 AUDIT_LOG="$LOG_DIR/bypass_audit.log"
 
+# macOS 自带 bash 3.2 的 ${var//pattern/} 全局替换对长串呈超线性耗时（10KB 约 40s），
+# 去引号、换行替换统一交给 tr/awk 线性处理，判定结果保持一致。
+strip_quotes() { printf '%s' "$1" | tr -d "\"'"; }
+
 decide() {
   local decision="$1"
   local reason="$2"
@@ -36,7 +40,8 @@ decide() {
     if [ -f "$AUDIT_LOG" ] && [ "$(stat -f%z "$AUDIT_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
       mv -f "$AUDIT_LOG" "$AUDIT_LOG.1" 2>/dev/null
     fi
-    local clean_cmd="${raw_cmd//$'\n'/⏎}"
+    local clean_cmd
+    clean_cmd=$(printf '%s' "$raw_cmd" | awk 'NR > 1 { printf "⏎" } { printf "%s", $0 }')
     # 基础脱敏：掩盖常见 Token、密钥字面量
     clean_cmd=$(sed -E -e 's/(bearer[[:space:]]+)[a-zA-Z0-9_\.~-]{10,}/\1[REDACTED]/gi' \
                        -e 's/(ghp_[a-zA-Z0-9]{20,}|gho_[a-zA-Z0-9]{20,})/[REDACTED]/g' \
@@ -62,11 +67,50 @@ rm_target_safe() {
   local t="${1//[\"\']/}" c comps
   t="${t%/\*}"; t="${t%/}"
   [[ -z "$t" || "$t" =~ (^|/)\.\.(/|$) ]] && return 1
+  # 同一命令内仅由 $(mktemp ...) 新建并赋值的临时目录变量（见 collect_mktemp_vars）
+  if [[ "$t" =~ ^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?(/.*)?$ && "$MKTEMP_VARS" == *" ${BASH_REMATCH[1]} "* ]]; then
+    return 0
+  fi
   [[ "$t" =~ ^(/private)?/tmp/.+ || "$t" =~ ^/var/folders/.+ ]] && return 0
   # 主目录、系统绝对目录绝不作为安全产物放行（例如 ~/.gradle）
   [[ "$t" =~ ^(~|\$HOME|\$\{HOME\}|/Users/|/home/|/root/|/etc/|/var/|/usr/|/bin/|/sbin/) ]] && return 1
   IFS=/ read -ra comps <<<"$t"
   for c in "${comps[@]}"; do [[ "$SAFE_DIRS" == *" $c "* ]] && return 0; done
+  return 1
+}
+
+# 收集同一条命令内只通过 $(mktemp ...) 赋值的变量名；被其他方式二次赋值的变量不视为临时目录
+MKTEMP_VARS=" "
+collect_mktemp_vars() {
+  local name total via
+  local assign_pat="(^|[^A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*=\\\$\\(mktemp([[:space:]]|\\))"
+  while IFS= read -r name; do
+    [ -z "$name" ] && continue
+    total=$(grep -oE "(^|[^A-Za-z0-9_])${name}=" <<<"$1" | wc -l)
+    via=$(grep -oE "(^|[^A-Za-z0-9_])${name}=\\\$\\(mktemp([[:space:]]|\\))" <<<"$1" | wc -l)
+    ((total == via)) && MKTEMP_VARS+="$name "
+  done < <(grep -oE "$assign_pat" <<<"$1" | sed -E 's/^[^A-Za-z_]//; s/=.*//' | sort -u)
+}
+
+# find -delete / -exec rm 判定：搜索根目录全部为构建产物或临时目录时放行，否则需确认
+find_delete_needs_confirm() {
+  local find_pat="${B}${WRAP}find[[:space:]].*(-delete|-exec(dir)?[[:space:]]+(/bin/)?rm([[:space:]]|$))"
+  [[ "$1" =~ $find_pat ]] || return 1
+  local seg toks i roots t
+  while IFS= read -r seg; do
+    [[ "$seg" =~ (^|[[:space:]])find[[:space:]] && "$seg" =~ (-delete|-exec(dir)?[[:space:]]+(/bin/)?rm([[:space:]]|$)) ]] || continue
+    read -ra toks <<<"$seg"
+    i=0
+    while ((i < ${#toks[@]})) && [[ "${toks[i]##*/}" != "find" ]]; do ((i++)); done
+    roots=()
+    for t in "${toks[@]:i+1}"; do
+      # 根目录参数止于第一个表达式（选项、括号或取反）
+      [[ "$t" == -* || "$t" == "(" || "$t" == '\(' || "$t" == "!" ]] && break
+      roots+=("$t")
+    done
+    ((${#roots[@]})) || return 0
+    for t in "${roots[@]}"; do rm_target_safe "$t" || return 0; done
+  done < <(tr ";;&|$NL" "$NL$NL$NL$NL" <<<"$1")
   return 1
 }
 
@@ -142,27 +186,35 @@ rm_needs_confirm() {
   return 1
 }
 
-# 剥离纯字面量 heredoc 块（若含 $ 或 ` 命令替换则保留送审）
+# 剥离 heredoc 正文：带引号定界符（<<'EOF'）的正文不做展开，一律跳过；
+# 无引号定界符的正文仅在整条命令不含 $ 或 ` 时跳过，否则保留送审。起始行 << 之前的命令始终保留。
 strip_heredocs() {
   local input="$1"
-  if [[ "$input" == *"<<"* && ! "$input" =~ [\$\`] ]]; then
-    awk '
-    /<<[[:space:]]*['\''"]?[a-zA-Z0-9_]+['\''"]?/ {
-      match($0, /<<[[:space:]]*['\''"]?[a-zA-Z0-9_]+['\''"]?/)
-      marker=substr($0, RSTART, RLENGTH)
-      gsub(/<<[[:space:]]*['\''"]?|['\''"]?/, "", marker)
-      in_here=1
-      next
-    }
-    in_here && $1 == marker {
-      in_here=0
-      next
-    }
-    !in_here { print }
-    ' <<<"$input"
-  else
+  if [[ "$input" != *"<<"* ]]; then
     echo "$input"
+    return
   fi
+  local has_subst=0
+  [[ "$input" =~ [\$\`] ]] && has_subst=1
+  awk -v has_subst="$has_subst" '
+  !in_here && /<<-?[[:space:]]*['\''"]?[a-zA-Z0-9_]+['\''"]?/ {
+    match($0, /<<-?[[:space:]]*['\''"]?[a-zA-Z0-9_]+['\''"]?/)
+    raw=substr($0, RSTART, RLENGTH)
+    marker=raw
+    gsub(/<<-?[[:space:]]*['\''"]?|['\''"]?/, "", marker)
+    quoted=(raw ~ /['\''"]/)
+    keep_body=(!quoted && has_subst)
+    print substr($0, 1, RSTART - 1)
+    in_here=1
+    next
+  }
+  in_here && $1 == marker {
+    in_here=0
+    next
+  }
+  in_here && !keep_body { next }
+  { print }
+  ' <<<"$input"
 }
 
 # 剥离 git commit 的纯字面量 -m 参数（若含 $ 或 ` 命令替换则保留送审）
@@ -180,7 +232,9 @@ strip_commit_messages() {
 is_sensitive_read() {
   local cmd="$1"
   local kw_pat="(\.npmrc|\.netrc|\.git-credentials|\.config/(gh|gcloud|op)|\.docker/config\.json|\.cargo/credentials|\.ssh|\.aws|\.kube|\.gnupg|gradle\.properties|keystore|\.pypirc|\.m2/settings|\.pem|\.p12|\.jks|\.key)"
-  [[ "$cmd" =~ $kw_pat || "${cmd//[\"\']/}" =~ $kw_pat ]] || return 1
+  local cmd_nq
+  cmd_nq=$(strip_quotes "$cmd")
+  [[ "$cmd" =~ $kw_pat || "$cmd_nq" =~ $kw_pat ]] || return 1
 
   local file_readers="(cat|head|tail|less|more|bat|cp|mv|base64|xxd|hexdump|od|tar|zip|gzip|7z|bzip2)"
   local search_tools="(grep|rg|awk|sed)"
@@ -190,7 +244,7 @@ is_sensitive_read() {
   local specific_key_files="([a-zA-Z0-9_.-]*[._-])?(rsa|dsa|ed25519|ecdsa|private|priv|secret|server|client|ssl|tls|cert|auth|jwt)[a-zA-Z0-9_.-]*\.key"
 
   # 双重检查：原始命令与去引号命令（免疫 'id_'rsa 等拼接逃逸）
-  local check_cmds=("$cmd" "${cmd//[\"\']/}")
+  local check_cmds=("$cmd" "$cmd_nq")
   for c in "${check_cmds[@]}"; do
     local read_global_pat="${B}${WRAP}${all_readers}[[:space:]]+.*${global_configs}"
     [[ "$c" =~ $read_global_pat ]] && return 0
@@ -233,7 +287,8 @@ audit_command() {
   [[ "$cmd" =~ $dd_pat ]] && decide deny "向块设备直接写入的 dd 操作已被全局硬性禁止"
 
   local rm_deny_pat="${B}${WRAP}(/bin/)?rm[[:space:]]+(-[a-zA-Z]+[[:space:]]+)*(/(\*)?|~(/|\*|/\*)?|\\\$HOME(/|\*|/\*)?|\\\$\{HOME\}(/|\*|/\*)?|/Users/[^/[:space:]]+(/|\*|/\*)?)([[:space:]\"']|$)"
-  local cmd_no_quotes="${cmd//[\"\']/}"
+  local cmd_no_quotes
+  cmd_no_quotes=$(strip_quotes "$cmd")
   if [[ "$cmd" =~ $rm_deny_pat || "$cmd_no_quotes" =~ $rm_deny_pat ]]; then
     decide deny "删除根目录或用户主目录已被全局硬性禁止"
   fi
@@ -307,7 +362,6 @@ audit_command() {
   # 9. 危险度 ≥90% 规则矩阵：不可逆删除、历史重写、强推、对外发布、远程执行、提权
   # ---------------------------------------------------------
   local rules=(
-    "${B}find[[:space:]].*(-delete|-exec[[:space:]]+(/bin/)?rm)|find 批量删除"
     "${B}xargs[[:space:]]+(-[^[:space:]]+[[:space:]]+)*(/bin/)?rm([[:space:]]|$)|xargs 批量删除"
     "${B}git${GIT_OPTS}reset[[:space:]].*--hard|git reset --hard 破坏性重置"
     "${B}git${GIT_OPTS}stash[[:space:]]+(drop|clear)|丢弃 Stash"
@@ -343,6 +397,9 @@ audit_command() {
     scan_cmd="${scan_cmd//gh api graphql/gh_api_graphql_read_safe}"
   fi
 
+  # find 批量删除：仅对非产物、非临时根目录要求确认
+  find_delete_needs_confirm "$scan_cmd" && decide ask "危险操作需确认：find 批量删除非构建产物目录"
+
   # 聚合关键字预筛：未命中直接放行
   local prefilter_keywords="find|xargs|git|gh|docker|gradlew|npm|pnpm|yarn|bun|cargo|twine|just|scp|rsync|sftp|curl|wget|sudo"
   [[ ! "$scan_cmd" =~ $prefilter_keywords ]] && return 0
@@ -353,5 +410,6 @@ audit_command() {
   done
 }
 
+collect_mktemp_vars "$raw_cmd"
 audit_command "$raw_cmd"
 exit 0
