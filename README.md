@@ -134,7 +134,7 @@ git -C ~/super/fullstack-claude-code-configuration diff
   * 精简无益变量：移除了冗余的 `FORCE_COLOR` 与 `CARGO_TERM_COLOR`（避免 ANSI 转义字符浪费 LLM Token）、移除 macOS 无效的 `DEBIAN_FRONTEND`、移除会导致 `pnpm install` 报 frozen-lockfile 错误的 `CI=1`。
 
 ### 4. 全局工程交付契约 (CLAUDE.md)
-* **严禁裸 `cd`**：强制使用工具自带路径参数（如 `git -C <path>`、`pnpm --filter <pkg>`、`cargo --manifest-path <path>`），保护执行稳定性；
+* **工作目录与命令执行规范**：优先使用工具自带路径参数（如 `git -C <path>`、`pnpm --dir <path>`、`cargo --manifest-path <path>`）；允许 `cd <path> && <command>` 单次执行，禁止依赖跨工具调用持久化的工作目录；删除、覆盖、清理等破坏性操作必须使用明确的目标路径；
 * **最小化变更集**：恪守解决问题所需的最小代码集，严禁跨模块随意重构或格式化破坏缓存；
 * **证据优先自动化验证**：严禁无证据交付，改动后必须执行目标模块最小语法编译或单测；
 * **结构化 Commit 规范**：全自动化输出标准的 Conventional Commits 格式日志。
@@ -152,9 +152,11 @@ git -C ~/super/fullstack-claude-code-configuration diff
 | **高危拦截** | `command rm -rf ~` / `\rm -rf ~` | **deny** | ✅ **包装器穿透**：`command`/反斜杠转义均被 DENY 斩杀 |
 | **高危拦截** | `bash -c "rm -rf ~"` / `env rm -rf ~` | **deny** | ✅ **解包穿透**：子 Shell 与 env 包装内层命令递归深度审查 |
 | **高危拦截** | `git commit -m "$(rm -rf ~)"` | **deny** | ✅ **命令替换穿透**：提取 `$(...)` 内层命令，绝不因 `-m` 逃逸 |
-| **契约执行** | `cd /Users/super/demo` / `builtin cd /` | **deny** | ✅ 物理严禁裸 `cd`，强制使用自带路径参数 |
-| **契约误报** | `echo "a; cd b"` | **放行** | ✅ **引号内字面量消除**：字符串内的分号不误报为裸 `cd` |
-| **契约执行** | `echo "a"; cd b` | **deny** | ✅ 引号外的命令连接符依然精准捕获裸 `cd` |
+| **契约放行** | `cd /Users/super/demo && ./gradlew :app:compileDebugKotlin` | **放行** | ✅ `cd <path> && <command>` 单次执行，不因使用 `cd` 拒绝正常构建/测试 |
+| **契约执行** | `cd /Users/super/demo` / `builtin cd /` | **deny** | ✅ 以 `cd` 收尾会把工作目录持久化到后续工具调用，禁止依赖 |
+| **契约误报** | `echo "a; cd b"` / `` echo `cd x && pwd` `` | **放行** | ✅ **引号内字面量与子 Shell 消除**：字符串内文本与子 Shell 内 `cd` 不影响外层目录 |
+| **契约执行** | `echo "a"; cd b` / `eval "cd b"` | **deny** | ✅ 引号外连接符或 `eval` 后以 `cd` 收尾依然精准捕获 |
+| **契约执行** | `cd /Users/super/demo && rm -rf src` | **ask** | ✅ `cd` 前缀不豁免破坏性操作，非产物目录删除仍需确认 |
 | **凭据读取** | `cat ~/.ssh/id_rsa` / `cat ~/.aws/credentials` | **ask** | ✅ 阻止读取 SSH 私钥与 AWS 云厂商核心凭据 |
 | **凭据读取** | `cat ~/.kube/config` / `cat ~/.git-credentials` | **ask** | ✅ 阻止读取 Kubernetes 证书与 Git 明文密码 |
 | **凭据读取** | `cat ~/.config/gcloud/credentials.db` | **ask** | ✅ 阻止读取 Google Cloud CLI 登录数据库凭据 |

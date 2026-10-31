@@ -3,7 +3,7 @@
 #
 # 架构与运维说明：
 # 1. 递归解包（sh -c / eval / $(...) / `...`）后审查真实指令
-# 2. deny：磁盘格式化、块设备写入、删除根/主目录、裸 cd（工程契约）
+# 2. deny：磁盘格式化、块设备写入、删除根/主目录、以 cd 收尾持久化工作目录（工程契约）
 # 3. ask：非产物目录递归删除、抹除未提交改动的 Git 操作、强推、对外发布、远程脚本执行、文件外发、长期凭据读取
 # 4. 其余命令（可恢复、仅影响本地）一律放行
 # 5. 审计日志：~/.claude/logs/bypass_audit.log，仅记录 deny/ask，超过 1MB 自动轮转，支持 GUARD_DRY_RUN
@@ -262,6 +262,8 @@ is_sensitive_read() {
 # 深度审计与决策主函数
 audit_command() {
   local cmd="$1"
+  # nested：子 Shell 内层命令，其工作目录变化不会回传外层
+  local depth="$2"
   [ -z "$cmd" ] && return 0
 
   # ---------------------------------------------------------
@@ -269,13 +271,14 @@ audit_command() {
   # ---------------------------------------------------------
   local subshell_pat='(bash|sh|zsh)[[:space:]]+(-[a-zA-Z]*c)[[:space:]]+["'\''"](.*)["'\''"]'
   local eval_pat='eval[[:space:]]+["'\''"](.*)["'\''"]'
-  [[ "$cmd" =~ $subshell_pat ]] && audit_command "${BASH_REMATCH[3]}"
-  [[ "$cmd" =~ $eval_pat ]] && audit_command "${BASH_REMATCH[1]}"
+  [[ "$cmd" =~ $subshell_pat ]] && audit_command "${BASH_REMATCH[3]}" nested
+  # eval 在当前 Shell 执行，cd 会持久化，按外层同级审查
+  [[ "$cmd" =~ $eval_pat ]] && audit_command "${BASH_REMATCH[1]}" "$depth"
 
   local subshell_dollar_pat='\$\(([^)]+)\)'
   local subshell_backtick_pat='`([^`]+)`'
-  [[ "$cmd" =~ $subshell_dollar_pat ]] && audit_command "${BASH_REMATCH[1]}"
-  [[ "$cmd" =~ $subshell_backtick_pat ]] && audit_command "${BASH_REMATCH[1]}"
+  [[ "$cmd" =~ $subshell_dollar_pat ]] && audit_command "${BASH_REMATCH[1]}" nested
+  [[ "$cmd" =~ $subshell_backtick_pat ]] && audit_command "${BASH_REMATCH[1]}" nested
 
   # ---------------------------------------------------------
   # 2. 绝对拒绝 (DENY)：磁盘格式化与系统级毁灭操作
@@ -301,15 +304,16 @@ audit_command() {
   scan_cmd=$(strip_commit_messages "$scan_cmd")
 
   # ---------------------------------------------------------
-  # 4. 工程契约：禁止裸 cd（消除成对引号字符串内的误报）
+  # 4. 工程契约：允许 cd <path> && <command> 单次执行；仅拒绝以 cd 收尾、
+  #    改变后续工具调用工作目录的命令（消除成对引号字符串内的误报）。
+  #    子 Shell（$(...) / `...` / sh -c）内的 cd 不影响外层目录，不做检查。
   # ---------------------------------------------------------
-  if [[ "$scan_cmd" == *cd* ]]; then
+  if [[ "$depth" != "nested" && "$scan_cmd" == *cd* ]]; then
     local no_str_cmd
     no_str_cmd=$(sed -E -e 's/"[^"]*"/""/g' -e "s/'[^']*'/''/g" <<<"$scan_cmd" 2>/dev/null || echo "$scan_cmd")
-    local cd_pat="${B}${WRAP}cd([[:space:]]+|$)"
-    local cd_safe_pat="${B}${WRAP}cd[[:space:]]+((/private)?/tmp|/var/folders/)"
-    if [[ "$no_str_cmd" =~ $cd_pat && ! "$no_str_cmd" =~ $cd_safe_pat ]]; then
-      decide deny "严禁使用裸 cd 命令！请遵守工程契约，改用工具自带路径参数（如 git -C <path>、pnpm --filter <pkg>、cargo --manifest-path <path>）"
+    local cd_tail_pat="${B}${WRAP}cd([[:space:]]+[^;&|${NL}]*)?$"
+    if [[ "$no_str_cmd" =~ $cd_tail_pat ]]; then
+      decide deny "禁止依赖跨工具调用持久化的工作目录：请改用 cd <path> && <command> 单次执行，或使用 git -C / pnpm --dir / cargo --manifest-path 等显式路径参数"
     fi
   fi
 

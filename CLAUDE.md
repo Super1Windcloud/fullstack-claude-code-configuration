@@ -8,13 +8,21 @@
   - 面对复合型复杂任务，主动通过需求收敛、方案设计、实施与验证等标准阶段推进，先给出技术决策权衡再实施。
 
 ## 2. 命令行执行与全栈包管理防线
-- **严禁裸 `cd` 指令**：执行任何命令行操作时，**绝对禁止提出或执行裸 `cd` 指令**。必须始终使用工具自带路径参数（如 `git -C <path>`、`pnpm --filter <pkg>`、`cargo --manifest-path <path>`）或显式绝对路径。
 - **全栈包管理器锁文件保护**：
   - **前端/Web/Tauri**：存在 `pnpm-lock.yaml` 时严禁调用 `npm install` 或 `yarn`；存在 `bun.lockb` 优先使用 `bun`；严禁破坏现有 lockfile；
   - **Android/Java/Kotlin**：统一使用项目根目录的 `./gradlew` 驱动目标模块局部编译与单测，禁止默认执行全量 `assemble` 或全工程构建；
   - **Rust**：优先使用 `cargo check` 或单 crate `cargo test -p <pkg>`，保护增量编译缓存。
 - **高危破坏性操作绝对防御**：严禁未经用户明确授权执行 `rm -rf`、`git reset --hard`、`git clean -fd`、`git push --force`、`sudo` 等不可逆操作。
 - **文件检视严禁盲猜路径与扩展名**：在调用 `view_file` 等读取工具前，若未通过已有上下文确认准确路径，严禁凭直觉臆测文件名或语言后缀（如混编工程中的 `.java`/`.kt`、`.ts`/`.tsx`）；必须先使用定位工具（如 `rg`、`find`）确认真实文件的绝对路径后再发起读取，严防触发底层 Cortex 工具参数与权限预检阻断（`invalid_args: stat ... no such file or directory`）。
+
+### 工作目录与命令执行规范
+
+1. 优先使用工具提供的显式路径参数，例如 `git -C`、`cargo --manifest-path`、`pnpm --dir`。
+2. 允许使用 `cd <path> && <command>` 执行单次命令。
+3. 禁止依赖跨工具调用持久化的工作目录状态。
+4. 执行删除、覆盖、清理等高风险操作时，必须使用明确的目标路径。
+5. 不得使用不确定的相对路径执行破坏性操作。
+6. 不应仅因为使用 `cd` 就拒绝正常的构建、测试或开发命令。
 
 ## 3. 代码演进与最小代码集原则
 - **风格一致性**：严格遵守目标工程现存的编码风格与架构规范（Java 按 Java 风格，Kotlin 按 Kotlin 风格，Rust 按 Rust 风格，TypeScript 按现有风格），严禁主观格式化覆盖既有代码。
