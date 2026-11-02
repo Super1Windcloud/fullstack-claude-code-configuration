@@ -525,7 +525,9 @@ avail=$(( term_cols - 2 ))
 
 assemble_line() {
   local esc=$'\e'
-  cur_line="${dir_part}${stack_part}${branch_part}${pr_part}${agent_part}${model_part}${ctx_pct_part}${ctx_tok_part}${rl_part}${rl7d_part}${cache_part}${hit_part}${miss_part}${lines_part}${mode_part}${vim_part}${cost_part}${session_part}"
+  # 不显示目录，避免长路径挤掉模型与 effort
+  cur_line="${stack_part}${branch_part}${pr_part}${agent_part}${model_part}${ctx_pct_part}${ctx_tok_part}${rl_part}${rl7d_part}${cache_part}${hit_part}${miss_part}${lines_part}${mode_part}${vim_part}${cost_part}${session_part}"
+  cur_line="${cur_line# }"
   local plain="${cur_line//${esc}\[[0-9;]#m/}"
   cur_len=${(m)#plain}
 }
@@ -543,28 +545,6 @@ done
 # 次核心降级：丢弃 5h 重置倒计时箭头字符串（仅保留 5h:55%）
 if (( cur_len > avail )); then
   rl_part="${rl_part//→[0-9dhm]##/}"
-  assemble_line
-fi
-
-# 终极兜底：超窄屏下按终端真实列宽（多字节安全）截断目录名，确保右侧状态绝不折行
-if (( cur_len > avail )); then
-  ell="…"
-  ell_w=${(m)#ell}
-  dir_w=${(m)#dir_str}
-  target_w=$(( dir_w - (cur_len - avail) - ell_w ))
-  (( target_w < 3 )) && target_w=3
-  res_dir=""
-  cur_dir_w=0
-  for (( i=1; i<=${#dir_str}; i++ )); do
-    ch="${dir_str[i]}"
-    ch_w=${(m)#ch}
-    if (( cur_dir_w + ch_w > target_w )); then
-      break
-    fi
-    res_dir+="$ch"
-    (( cur_dir_w += ch_w ))
-  done
-  printf -v dir_part '\033[1;36m%s%s\033[0m' "$res_dir" "$ell"
   assemble_line
 fi
 

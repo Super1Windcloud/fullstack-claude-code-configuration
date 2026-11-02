@@ -1,6 +1,6 @@
 #!/bin/zsh
 # statusline-command.sh 回归测试：zsh ~/.claude/statusline-command.test.sh
-# 覆盖：显示宽度不超限（含中文会话名）、降级优先级、兜底截断、hit_ratio 告警、miss 时效与原因短码、冷启动、git dirty 状态
+# 覆盖：显示宽度不超限（含中文会话名）、降级优先级、不显示目录、hit_ratio 告警、miss 时效与原因短码、冷启动、git dirty 状态
 
 S="${0:A:h}/statusline-command.sh"
 now=$(date +%s)
@@ -71,19 +71,15 @@ check "过期 miss 不显示" '[[ "$out" != *"miss:"* ]]'
 
 # 4. 冷启动（无 API 响应）正常渲染且无上下文段
 out=$(render 120 "$cold" | plain)
-check "冷启动渲染目录与模型" '[[ "$out" == "hyperscoop"* && "$out" == *"Opus 5.5" ]]'
+check "冷启动渲染模型且不显示目录" '[[ "$out" != *"hyperscoop"* && "$out" == *"Opus 5.5" ]]'
 
-# 4b. 非 Git 深路径：HOME 下缩写为 ~，非 HOME 不误加 ~；模拟 harness.py 部署替换后行为不变
+# 4b. 不显示目录：HOME 与非 HOME 深路径均不出现在状态栏，模型位于行首
 hj='{"cwd":"'$HOME'/Library/Android/sdk/platform-tools","model":{"display_name":"M"}}'
 oj='{"cwd":"/sl-nonexist/a/b/c/d","model":{"display_name":"M"}}'
 out=$(render 200 "$hj" | plain)
-check "HOME 深路径缩写为 ~" '[[ "$out" == "~/.../sdk/platform-tools"* ]]'
+check "HOME 深路径不显示目录" '[[ "$out" == "M" ]]'
 out=$(render 200 "$oj" | plain)
-check "非 HOME 深路径不加 ~" '[[ "$out" == "/.../c/d"* ]]'
-D="${TMPDIR:-/tmp}"; D="${D%/}/sl-deployed.$$.sh"
-sed "s#~/#$HOME/#g" "$S" > "$D"
-out=$(print -r -- "$hj" | STATUSLINE_WIDTH=200 zsh "$D" | plain); rm -f "$D"
-check "部署替换 ~/ 后仍缩写为 ~" '[[ "$out" == "~/.../sdk/platform-tools"* ]]'
+check "非 HOME 深路径不显示目录" '[[ "$out" == "M" ]]'
 
 # 4c. subagentStatusLine 协议：每个任务输出一行 {"id","content"} JSON
 sj='{"session_id":"s","cwd":"/tmp","columns":129,"tasks":[{"id":"a1","type":"local_agent","status":"running","startTime":'$(( (now - 83) * 1000 ))',"model":"claude-haiku-4-5-20251001","effort":"high","contextWindowSize":200000,"tokenCount":18481},{"id":"a2","status":"completed","model":"claude-opus-5-5","tokenCount":0}]}'
@@ -92,7 +88,7 @@ check "子代理每任务一行合法 JSON" '[[ $(print -r -- "$out" | jq -s "le
 check "子代理内容含模型/上下文/耗时" '[[ $(print -r -- "$out" | jq -rs ".[0].content") == "haiku-4-5·high 18k/200k 9% 1m2"* ]]'
 check "子代理非运行态显示状态" '[[ $(print -r -- "$out" | jq -rs ".[1].content") == "opus-5-5 completed" ]]'
 out=$(render 160 '{"cwd":"/sl-nonexist","session_name":"\"tasks\" 重构","model":{"display_name":"M"}}' | plain)
-check "会话名含 tasks 仍走主状态栏" '[[ "$out" == "/sl-nonexist M"* ]]'
+check "会话名含 tasks 仍走主状态栏" '[[ "$out" == "M ["* && "$out" != *"/sl-nonexist"* ]]'
 
 # 4d. 7d 不依赖 5h；百分比四舍五入一致；PR 与 vim
 out=$(render 160 '{"cwd":"/sl-nonexist","model":{"display_name":"M"},"context_window":{"used_percentage":38.6},"rate_limits":{"seven_day":{"used_percentage":66}}}' | plain)
